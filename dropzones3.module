@@ -1,0 +1,197 @@
+<?php
+/**
+ * @file
+ * Provides API for drag & drop upload features.
+ */
+
+require_once dirname(__FILE__) . '/dropzones3.field.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function dropzones3_menu() {
+  $items['dropzones3/ajax/sign'] = array(
+    'page callback' => 'dropzones3_sign',
+    'access arguments' => array('access content'),
+    'delivery callback' => 'ajax_deliver',
+    'theme callback' => 'ajax_base_page_theme',
+    'type' => MENU_CALLBACK,
+  );
+  $items['dropzones3/ajax/finish'] = array(
+    'page callback' => 'dropzones3_finish',
+    'access arguments' => array('access content'),
+    'delivery callback' => 'ajax_deliver',
+    'theme callback' => 'ajax_base_page_theme',
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Sign the request with AWS private key if conditions are met.
+ */
+function dropzones3_sign() {
+  $date = new DateTime('NOW', new DateTimeZone('UTC'));
+  $signature = _dropzones3_get_signature($date);
+
+  $directory = 's3://';
+  if (!empty($base_dir)) {
+    $directory .= "$base_dir/";
+  }
+  $uri = file_create_filename($filename, $directory);
+  $key = file_uri_target($uri);
+  if (!empty($config['root_folder'])) {
+    $key = "{$config['root_folder']}/$key";
+  }
+
+  $data = array(
+    "date" => $date->format('c'),
+    "signature" => $signature,
+    "key" => preg_replace("/[^\w]+/", "", $_REQUEST['filename']) . strval(rand(0, 10000000000)),
+  );
+}
+
+/**
+ * Signature is scoped to service (s3), region, and date, with private key.
+ */
+function _dropzones3_get_signature($date) {
+  $k_date = hash_hmac(
+    'sha256', $date->format("Ymd"),
+    "AWS4" . $this->AWS_SECRET,
+    TRUE
+    );
+
+  $k_region = hash_hmac(
+    'sha256', $this->REGION, $k_date, TRUE
+    );
+  $k_service = hash_hmac(
+    'sha256', "s3", $k_region, TRUE
+    );
+  $k_signing = hash_hmac(
+    'sha256', "aws4_request", $k_service
+    );
+  return $k_signing;
+}
+
+/**
+ * Ajax callback for when a file has been successfully uploaded to s3.
+ *
+ * Function saves file info to database.
+ */
+function dropzones3_finish() {
+  return json_encode(array('success' => TRUE));
+}
+
+/**
+ * Implements hook_theme().
+ */
+function dropzones3_theme($existing, $type, $theme, $path) {
+  $module_path = drupal_get_path('module', 'dropzones3');
+  return array(
+    'dropzones3_template' => array(
+      'render element' => 'template',
+    ),
+    'dropzones3' => array(
+      'render element' => 'element',
+      'template' => 'dropzones3',
+      'path' => $module_path . '/templates',
+    ),
+    'dropzones3-item' => array(
+      'render element' => 'element',
+      'template' => 'dropzones3-item',
+      'path' => $module_path . '/templates',
+    ),
+  );
+}
+
+/**
+ * Theme function for wrapping the template as needed for Backbone.View.render.
+ *
+ * By default, Drupal.Backbone.View uses Underscore templating and the
+ * element's DOM ID to extract the template source.
+ *
+ * @param array $variables
+ *   Variables array containing the id and source for the template.
+ *
+ *   Note: all template sources provided by modules should be provided by theme
+ *   functions as well, so they can be overridden at the theme level as desired.
+ *
+ * @return string
+ *   The HTML for the wrapped template.
+ */
+function theme_dropzones3_template($variables = array()) {
+  $template_id = $variables['template']['#template_id'];
+  $template_source = $variables['template']['#template_source'];
+  return <<<TEMPLATE
+  <script id="{$template_id}" type="text/template">
+    {$template_source}
+  </script>
+TEMPLATE;
+}
+
+/**
+ * Implements hook_page_build().
+ *
+ * Add the templates to the render array for the page, at the bottom of the
+ * page. Taken from backbone module.
+ */
+function dropzones3_page_build(&$page) {
+  $templates = drupal_static('dropzones3_templates', array());
+  foreach ((array) $templates as $template_id => $template_source) {
+    $page['page_bottom']['dropzones3_templates'][] = array(
+      '#theme' => 'dropzones3_template',
+      '#template_id' => $template_id,
+      '#template_source' => $template_source,
+    );
+  }
+}
+
+/**
+ * Add template to array of templates to be included in page.
+ *
+ * Uses a global to store array, attaches at hook_page_build.
+ *
+ * @param string $template_id
+ *   The id of this template, will be the selector used in Backbone View.
+ * @param string $template_source
+ *   The source code of the template.
+ *
+ *   Note: all template sources provided by modules should be provided by theme
+ *   functions as well, so they can be overridden at the theme level as desired.
+ */
+function dropzones3_add_template($template_id, $template_source) {
+  $templates = & drupal_static('dropzones3_templates', array());
+  $templates[$template_id] = $template_source;
+}
+
+/**
+ * Implements hook_libraries_info().
+ *
+ * Use DropzoneS3 and CryptoJS.
+ */
+function dropzones3_libraries_info() {
+  $libraries['cryptojs'] = array(
+    'name' => 'CryptoJS',
+    'vendor url' => 'https://code.google.com/p/crypto-js/',
+    'version callback' => 'dropzones3_simple_version_callback',
+    'files' => array(
+      'js' => array('rollups/hmac-sha256.js'),
+    ),
+  );
+  $libraries['dropzones3'] = array(
+    'name' => 'Dropzone S3',
+    'vendor url' => 'https://github.com/adamsro/dropzones3',
+    'version callback' => 'dropzones3_simple_version_callback',
+    'files' => array(
+      'js' => array('dist/dropzones3.min.js'),
+    ),
+  );
+  return $libraries;
+}
+
+/**
+ * Ddont check library versions.
+ */
+function dropzones3_simple_version_callback() {
+  return TRUE;
+}
