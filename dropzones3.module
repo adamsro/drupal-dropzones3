@@ -7,6 +7,32 @@
 require_once dirname(__FILE__) . '/dropzones3.field.inc';
 
 /**
+ * Implements hook_help().
+ */
+function dropzones3_help($path, $arg) {
+  var_dump($path);
+  if ($path == 'admin/config/media/dropzones3') {
+    $output = t("New users are created in @link", array(
+      '@url' => l('AWS Console > Identity and Access Management', 'https://console.aws.amazon.com/iam'))
+    );
+    $output .= '<strong>' . t(" Be sure to use a user with permissions limited to multipart uploading.") . '</strong>';
+    return $output;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function dropzones3_permission() {
+  return array(
+    'administer dropzones3' => array(
+      'title' => t('Administer DropzoneS3'),
+      'description' => t('Change DropzoneS3\'s global settings'),
+    ),
+  );
+}
+
+/**
  * Implements hook_menu().
  */
 function dropzones3_menu() {
@@ -23,6 +49,14 @@ function dropzones3_menu() {
     'delivery callback' => 'ajax_deliver',
     'theme callback' => 'ajax_base_page_theme',
     'type' => MENU_CALLBACK,
+  );
+  $items['admin/config/media/dropzones3'] = array(
+    'title' => t('DropzoneS3 settings'),
+    'description' => t('Set default AWS credentials, region, and bucket for DropzoneS3 elements.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dropzones3_admin_form'),
+    'access arguments' => array('administer dropzones3'),
+    'file' => 'dropzones3.admin.inc',
   );
   return $items;
 }
@@ -184,6 +218,7 @@ function dropzones3_libraries_info() {
     'version callback' => 'dropzones3_simple_version_callback',
     'files' => array(
       'js' => array('dist/dropzones3.min.js'),
+      'css' => array('dist/dropzones3.css'),
     ),
   );
   return $libraries;

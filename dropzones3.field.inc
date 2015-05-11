@@ -16,6 +16,8 @@ function dropzones3_element_info() {
     '#process' => array('dropzones3_element_process'),
     '#pre_render' => array('dropzones3_element_pre_render'),
     '#theme' => 'dropzones3',
+    '#button_id' => NULL,
+    '#message' => t('Drop files here or click to upload.'),
     '#progress_message' => NULL,
     '#upload_validators' => array(),
     '#extended' => TRUE,
@@ -37,39 +39,29 @@ function dropzones3_element_info() {
 function dropzones3_element_process($element, &$form_state, $form) {
   dropzones3_add_template("dropzones3-item", theme('dropzones3-item'));
 
-  // The file upload field itself.
-  $element['upload'] = array(
-    '#name' => 'files[' . implode('_', $element['#parents']) . '][]',
-    '#type' => 'file',
-    '#title' => t('Choose a file'),
-    '#title_display' => 'invisible',
-    '#size' => $element['#size'],
-    '#theme_wrappers' => array(),
-    '#weight' => -10,
-  );
-
   if (isset($element['#upload_validators']['file_validate_extensions'][0])) {
     $extension_list = implode(',', array_filter(explode(' ', $element['#upload_validators']['file_validate_extensions'][0])));
   }
+  $element['#button_id'] = $element['#id'] . '-button';
 
   $element['#attached']['js'][] = array(
     'type' => 'setting',
     'data' => array(
-      'dropzones3' => array(
-        'elements' => array(
-          '#' . $element['#id'] => array(
-            'extentions' => isset($extension_list) ? $extension_list : NULL,
-            'autostart' => $element['#autostart'],
-            'file_input' => $element['upload']['#name'],
-            'max_size' => $element['#max_filesize'],
-            'access_key' => variable_get('awssdk2_access_key', ''),
-            'bucket' => $config['bucket'],
-            'region' => $config['region'],
-            'key' => (string) rand(1, 1000000),
-            'ajax_base' => '/dropzones3/ajax',
-            'extra_params' => array(
-              'form_build_id' => $form['form_build_id']['#value'],
-            ),
+      'dzs3' => array(
+        '#' . $element['#id'] => array(
+          'extentions' => isset($extension_list) ? $extension_list : NULL,
+          'autostart' => $element['#autostart'],
+          'file_input' => $element['upload']['#name'],
+          'max_size' => $element['#max_filesize'],
+          'ajax_base' => '/dropzones3/ajax',
+          'extra_params' => array(
+            'form_build_id' => $form['form_build_id']['#value'],
+          ),
+          'signingEndpoint' => '/dropzones3/ajax/sign',
+          's3' => array(
+            'accesskey' => variable_get('dropzones3_aws_access_key'),
+            'region' => variable_get('dropzones3_aws_region'),
+            'bucket' => variable_get('dropzones3_aws_bucket'),
           ),
         ),
       ),
@@ -88,12 +80,6 @@ function dropzones3_element_pre_render($element) {
   if (($library = libraries_load('dropzones3')) && empty($library['loaded'])) {
     drupal_set_message("Library 'Dropzone S3' not found.", 'error');
   }
-/*
-  // If we already have a file, we don't want to show the upload controls.
-  if (!empty($element['#value']['fid'])) {
-    $element['upload']['#access'] = FALSE;
-  }
-*/
   return $element;
 }
 
