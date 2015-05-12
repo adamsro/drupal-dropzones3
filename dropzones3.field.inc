@@ -22,6 +22,7 @@ function dropzones3_element_info() {
     '#upload_validators' => array(),
     '#extended' => TRUE,
     '#max_filesize' => '',
+    '#server_side_encrypt' => '',
     '#autostart' => TRUE,
     '#description' => '',
     '#attached' => array(
@@ -50,18 +51,18 @@ function dropzones3_element_process($element, &$form_state, $form) {
       'dzs3' => array(
         '#' . $element['#id'] => array(
           'extentions' => isset($extension_list) ? $extension_list : NULL,
-          'autostart' => $element['#autostart'],
-          'file_input' => $element['upload']['#name'],
-          'max_size' => $element['#max_filesize'],
-          'ajax_base' => '/dropzones3/ajax',
-          'extra_params' => array(
-            'form_build_id' => $form['form_build_id']['#value'],
+          'autoQueue' => $element['#autostart'],
+          'maxFilesize' => $element['#max_filesize'],
+          'maxFiles' => $element['#max_files'],
+          'signing' => array(
+            'endpoint' => '/dropzones3/ajax/sign/',
+            'params' => array('form_build_id' => $form['form_build_id']['#value']),
           ),
-          'signingEndpoint' => '/dropzones3/ajax/sign',
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
             'region' => variable_get('dropzones3_aws_region'),
             'bucket' => variable_get('dropzones3_aws_bucket'),
+            'ssencrypt' => $element['#server_side_encrypt'],
           ),
         ),
       ),
@@ -119,16 +120,6 @@ function dropzones3_field_widget_settings_form($field, $instance) {
     '#title' => t('Start upload on files added'),
     '#default_value' => $settings['autostart'],
     '#description' => t('When checked, upload will start as soon as files are added without requiring to click <em>Upload</em>, unless some of the added files did not pass validation.'),
-  );
-  $form['awskey'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Key for user which will upload to S3 bucket.'),
-    '#default_value' => $settings['awskey'],
-  );
-  $form['awsbucketname'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Name of the s3 bucket to be uplaoded to'),
-    '#default_value' => $settings['awsbucketname'],
   );
   return $form;
 }

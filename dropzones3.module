@@ -10,12 +10,11 @@ require_once dirname(__FILE__) . '/dropzones3.field.inc';
  * Implements hook_help().
  */
 function dropzones3_help($path, $arg) {
-  var_dump($path);
   if ($path == 'admin/config/media/dropzones3') {
-    $output = t("New users are created in @link", array(
-      '@url' => l('AWS Console > Identity and Access Management', 'https://console.aws.amazon.com/iam'))
+    $output = t('New users are created in !link. ', array(
+      '!link' => l(t('AWS Console > Identity and Access Management'), 'https://console.aws.amazon.com/iam'))
     );
-    $output .= '<strong>' . t(" Be sure to use a user with permissions limited to multipart uploading.") . '</strong>';
+    $output .= '<strong>' . t("Be sure to use a credientials for a user with permissions limited to multipart uploading.") . '</strong>';
     return $output;
   }
 }
@@ -27,7 +26,7 @@ function dropzones3_permission() {
   return array(
     'administer dropzones3' => array(
       'title' => t('Administer DropzoneS3'),
-      'description' => t('Change DropzoneS3\'s global settings'),
+      'description' => t("Change DropzoneS3's global settings"),
     ),
   );
 }
@@ -65,6 +64,13 @@ function dropzones3_menu() {
  * Sign the request with AWS private key if conditions are met.
  */
 function dropzones3_sign() {
+
+  // Fucntion 'ajax_get_form' expects form_build_id in POST.
+  $_POST['form_build_id'] = $_GET['form_build_id'];
+
+  // Ensure form_build_id is valid.
+  list($form, $form_state) = ajax_get_form();
+
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
   $signature = _dropzones3_get_signature($date);
 
@@ -217,7 +223,8 @@ function dropzones3_libraries_info() {
     'vendor url' => 'https://github.com/adamsro/dropzones3',
     'version callback' => 'dropzones3_simple_version_callback',
     'files' => array(
-      'js' => array('dist/dropzones3.min.js'),
+      // 'js' => array('dist/dropzones3.min.js'),
+      'js' => array('src/dropzones3.js'),
       'css' => array('dist/dropzones3.css'),
     ),
   );
