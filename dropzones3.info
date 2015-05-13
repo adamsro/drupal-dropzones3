@@ -5,3 +5,4 @@ package = User interface
 dependencies[] = field
 dependencies[] = jquery_update
 dependencies[] = libraries
+dependencies[] = s3fs

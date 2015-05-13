@@ -35,18 +35,14 @@ function dropzones3_permission() {
  * Implements hook_menu().
  */
 function dropzones3_menu() {
-  $items['dropzones3/ajax/sign'] = array(
+  $items['js/dropzones3/sign'] = array(
     'page callback' => 'dropzones3_sign',
     'access arguments' => array('access content'),
-    'delivery callback' => 'ajax_deliver',
-    'theme callback' => 'ajax_base_page_theme',
     'type' => MENU_CALLBACK,
   );
-  $items['dropzones3/ajax/finish'] = array(
+  $items['js/dropzones3/finish'] = array(
     'page callback' => 'dropzones3_finish',
     'access arguments' => array('access content'),
-    'delivery callback' => 'ajax_deliver',
-    'theme callback' => 'ajax_base_page_theme',
     'type' => MENU_CALLBACK,
   );
   $items['admin/config/media/dropzones3'] = array(
@@ -64,31 +60,47 @@ function dropzones3_menu() {
  * Sign the request with AWS private key if conditions are met.
  */
 function dropzones3_sign() {
-
+  $form_parents = func_get_args();
   // Fucntion 'ajax_get_form' expects form_build_id in POST.
-  $_POST['form_build_id'] = $_GET['form_build_id'];
+  $_POST['form_build_id'] = $form_build_id = (string) array_pop($form_parents);
 
   // Ensure form_build_id is valid.
   list($form, $form_state) = ajax_get_form();
 
-  $date = new DateTime('NOW', new DateTimeZone('UTC'));
-  $signature = _dropzones3_get_signature($date);
+  // Get the current element and count the number of files.
+  $current_element = $form;
+  foreach ($form_parents as $parent) {
+    $current_element = $current_element[$parent];
+  }
 
+  // Require filename and filesize be present validated as well.
+  // This could be bypassed but makes things a little more difficult.
+  $file = new stdClass();
+  if (!($file->filename = $_POST['name']) || !($file->filesize = $_POST['size']) || !empty(file_validate($file, $current_element['#upload_validators']))) {
+    drupal_exit();
+  }
+  // ini_set('html_errors', false);
+  // var_dump($current_element);
+  // Check for an upload location and make use of it.
+  $base_dir = file_uri_target($current_element["#upload_location"]);
   $directory = 's3://';
   if (!empty($base_dir)) {
     $directory .= "$base_dir/";
   }
-  $uri = file_create_filename($filename, $directory);
+  $uri = file_create_filename($file->filename, $directory);
   $key = file_uri_target($uri);
-  if (!empty($config['root_folder'])) {
-    $key = "{$config['root_folder']}/$key";
-  }
+  $date = new DateTime('NOW', new DateTimeZone('UTC'));
+  $signature = _dropzones3_get_signature($date);
 
   $data = array(
     "date" => $date->format('c'),
     "signature" => $signature,
-    "key" => preg_replace("/[^\w]+/", "", $_REQUEST['filename']) . strval(rand(0, 10000000000)),
+    "key" => $key,
   );
+  // Prepare to send JSON text to the browser.
+  drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
+  print json_encode($data);
+  drupal_exit();
 }
 
 /**
@@ -97,12 +109,12 @@ function dropzones3_sign() {
 function _dropzones3_get_signature($date) {
   $k_date = hash_hmac(
     'sha256', $date->format("Ymd"),
-    "AWS4" . $this->AWS_SECRET,
+    "AWS4" . variable_get('dropzones3_aws_secret_key'),
     TRUE
     );
 
   $k_region = hash_hmac(
-    'sha256', $this->REGION, $k_date, TRUE
+    'sha256', variable_get('dropzones3_aws_region'), $k_date, TRUE
     );
   $k_service = hash_hmac(
     'sha256', "s3", $k_region, TRUE
