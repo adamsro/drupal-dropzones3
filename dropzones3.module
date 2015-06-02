@@ -40,8 +40,9 @@ function dropzones3_menu() {
     'access arguments' => array('access content'),
     'type' => MENU_CALLBACK,
   );
-  $items['js/dropzones3/finish'] = array(
-    'page callback' => 'dropzones3_finish',
+  // Endpoint for JS Library to notify Drupal of successful upload.
+  $items['js/dropzones3/notify'] = array(
+    'page callback' => 'dropzones3_notify',
     'access arguments' => array('access content'),
     'type' => MENU_CALLBACK,
   );
@@ -79,15 +80,13 @@ function dropzones3_sign() {
   if (!($file->filename = $_POST['name']) || !($file->filesize = $_POST['size']) || !empty(file_validate($file, $current_element['#upload_validators']))) {
     drupal_exit();
   }
-  // ini_set('html_errors', false);
-  // var_dump($current_element);
   // Check for an upload location and make use of it.
   $base_dir = file_uri_target($current_element["#upload_location"]);
   $directory = 's3://';
   if (!empty($base_dir)) {
     $directory .= "$base_dir/";
   }
-  $uri = file_create_filename($file->filename, $directory);
+  $uri = file_create_filename($file->filename, $directory) . '-' . md5(uniqid(mt_rand(), true));
   $key = file_uri_target($uri);
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
   $signature = _dropzones3_get_signature($date);
@@ -99,7 +98,7 @@ function dropzones3_sign() {
   );
   // Prepare to send JSON text to the browser.
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
-  print json_encode($data);
+  print drupal_json_encode($data);
   drupal_exit();
 }
 
@@ -126,12 +125,68 @@ function _dropzones3_get_signature($date) {
 }
 
 /**
- * Ajax callback for when a file has been successfully uploaded to s3.
- *
- * Function saves file info to database.
+ * Ajax call to save reference to file stored in s3.
  */
-function dropzones3_finish() {
-  return json_encode(array('success' => TRUE));
+function dropzones3_notify() {
+  global $user;
+  $form_parents = func_get_args();
+  // Fucntion 'ajax_get_form' expects form_build_id in POST.
+  $_POST['form_build_id'] = $form_build_id = (string) array_pop($form_parents);
+  // Ensure form_build_id is valid.
+  list($form, $form_state) = ajax_get_form();
+
+  // Get the current element and count the number of files.
+  $current_element = $form;
+  foreach ($form_parents as $parent) {
+    $current_element = $current_element[$parent];
+  }
+
+  $base_dir = '';
+  if (isset($current_element['#upload_location']) && file_uri_target($current_element['#upload_location']) != '') {
+    $base_dir = file_uri_target($current_element['#upload_location']) . '/';
+  }
+
+  $file_exists = db_select('s3fs_file', 's')
+    ->fields('s', array('uri'))
+    ->condition('uri', $base_dir . $_POST['key'], '=')
+    ->condition('dir', 0, '=')
+    ->execute();
+
+  // We dont want to overwrite metadata for an existing file. A user could change
+  // $_POST['key'] to point to a file they didnt own and gain access to it.
+  if ($file_exists->rowCount()) {
+    drupal_exit();
+  }
+
+  // Construct a Drupal file object.
+  $file = new stdClass();
+  $file->uid = $user->uid;
+  $file->filename = $_POST['filename'];
+  $file->filesize = $_POST['filesize'];
+  $file->filemime = $_POST['filemime'];
+  $file->uri = 's3://' . $base_dir . $_POST['key'];
+  $file->status = 0;
+  $file->timestamp = REQUEST_TIME;
+
+  // Save the uploaded file to the file_managed table.
+  module_invoke_all('file_presave', $file);
+  module_invoke_all('entity_presave', $file, 'file');
+
+  drupal_write_record('file_managed', $file);
+  // Inform modules about the newly added file.
+  module_invoke_all('file_insert', $file);
+  module_invoke_all('entity_insert', $file, 'file');
+
+  // Clear the static loading cache.
+  entity_get_controller('file')->resetCache(array($file->fid));
+
+  // Store the file's metadata into s3fs's metadata cache.
+  $wrapper = new S3fsStreamWrapper();
+  $wrapper->writeUriToCache($file->uri);
+  // Prepare to send JSON text to the browser.
+  drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
+  print drupal_json_encode(array('fid' => $file->fid));
+  drupal_exit();
 }
 
 /**

@@ -44,27 +44,32 @@ function dropzones3_element_process($element, &$form_state, $form) {
   }
 
   $parents = array_slice($element['#array_parents'], 0, -1);
-  $endpoint = '/js/dropzones3/sign/' . implode('/', $parents) . '/' . $form['form_build_id']['#value'] . '/';
+  $signing_endpoint = '/js/dropzones3/sign/' . implode('/', $parents) . '/' . $form['form_build_id']['#value'] . '/';
+  $notifying_endpoint = '/js/dropzones3/notify/' . implode('/', $parents) . '/' . $form['form_build_id']['#value'] . '/';
 
   $element['#attached']['js'][] = array(
     'type' => 'setting',
     'data' => array(
       'dzs3' => array(
         '#' . $element['#id'] => array(
-          'extentions' => isset($extension_list) ? $extension_list : NULL,
           'autoQueue' => $element['#autostart'],
-          'maxFilesize' => $element['#max_filesize'],
-          'maxFiles' => $element['#max_files'],
-          'signing' => array(
-            'endpoint' => $endpoint,
-            // 'params' => array('form_build_id' => $form['form_build_id']['#value']),
-            'ssencrypt' => (bool) $element['#server_side_encrypt'],
-          ),
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
             'region' => variable_get('dropzones3_aws_region'),
             'bucket' => variable_get('dropzones3_aws_bucket'),
             'ssencrypt' => $element['#server_side_encrypt'],
+          ),
+          'signing' => array(
+            'endpoint' => $signing_endpoint,
+            'ssencrypt' => (bool) $element['#server_side_encrypt'],
+          ),
+          'notifying' => array(
+            'endpoint' => $notifying_endpoint,
+          ),
+          'validation' => array(
+            // 'maxFiles' => $element['#max_files'],
+            // 'maxFilesize' => $element['#max_filesize'],
+            'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
           ),
         ),
       ),
@@ -136,7 +141,7 @@ function dropzones3_field_widget_settings_form($field, $instance) {
   $form['message'] = array(
     '#type' => 'textarea',
     '#title' => t('Text in drop area'),
-    '#default_value' => $settings['message'] ? $settings['message'] : t(),
+    '#default_value' => $settings['message'] ? $settings['message'] : t('Drop files here or click to upload.'),
   );
   return $form;
 }
