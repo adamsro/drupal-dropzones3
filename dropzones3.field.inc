@@ -9,18 +9,18 @@
  */
 function dropzones3_element_info() {
   $file_path = drupal_get_path('module', 'dropzones3');
+  $config = _s3fs_get_config();
   $types['dropzones3'] = array(
-    // '#input' => TRUE,
     '#value_callback' => 'file_managed_file_value',
     '#element_validate' => array('file_managed_file_validate'),
     '#process' => array('dropzones3_element_process'),
     '#pre_render' => array('dropzones3_element_pre_render'),
     '#theme' => 'dropzones3',
     '#message' => t('Drop files here or click to upload.'),
-    // '#progress_message' => NULL,
+    // The S3 directory relative to the bucket root where files are uploaded.
+    '#upload_location' => !empty($config['root_folder']) ? $config['root_folder'] : '',
     '#upload_validators' => array(),
-    // '#extended' => TRUE,
-    '#max_filesize' => '',
+    '#extended' => TRUE,
     '#autostart' => TRUE,
     '#ssencrypt' => FALSE,
     '#description' => '',
@@ -39,13 +39,17 @@ function dropzones3_element_info() {
 function dropzones3_element_process($element, &$form_state, $form) {
   dropzones3_add_template("dropzones3-item", theme('dropzones3-item'));
 
+  // Dropzone expects a dot before all accepted extensions to
+  // differentiate between accepted MIME types.
+  $dot = function($string) {
+    return '.' . $string;
+  };
   if (isset($element['#upload_validators']['file_validate_extensions'][0])) {
-    $extension_list = implode(',', array_filter(explode(' ', $element['#upload_validators']['file_validate_extensions'][0])));
+    $extension_list = implode(',', array_map($dot, array_filter(explode(' ', $element['#upload_validators']['file_validate_extensions'][0]))));
   }
 
-  $parents = array_slice($element['#array_parents'], 0, -1);
-  $signing_endpoint = '/js/dropzones3/sign/' . implode('/', $parents) . '/' . $form['form_build_id']['#value'] . '/';
-  $notifying_endpoint = '/js/dropzones3/notify/' . implode('/', $parents) . '/' . $form['form_build_id']['#value'] . '/';
+  $signing_endpoint = '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'];
+  $notifying_endpoint = '/js/dropzones3/notify/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'];
 
   $element['#attached']['js'][] = array(
     'type' => 'setting',
@@ -68,7 +72,8 @@ function dropzones3_element_process($element, &$form_state, $form) {
           ),
           'validation' => array(
             // 'maxFiles' => $element['#max_files'],
-            // 'maxFilesize' => $element['#max_filesize'],
+            // Convert bytes to KB to MB.
+            'maxFilesize' => $element['#upload_validators']['file_validate_size'][0] / 1024 / 1024,
             'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
           ),
         ),
@@ -157,6 +162,8 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     'description' => '',
   );
 
+  $max_filesize = parse_size($instance['settings']['max_filesize']);
+
   // Load the items for form rebuilds from the field state as they might not be
   // in $form_state['values'] because of validation limitations. Also, they are
   // only passed in as $items when editing existing entities.
@@ -170,10 +177,11 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     '#upload_location' => $instance['settings']['file_directory'],
     '#upload_validators' => array(
       'file_validate_name_length' => array(),
-      'file_validate_size' => array($instance['settings']['max_filesize']),
+      'file_validate_size' => array($max_filesize),
       'file_validate_extensions' => array($instance['settings']['file_extensions']),
     ),
     '#ssencrypt' => $instance['settings']['ssencrypt'],
+    // '#max_filesize' => $instance['settings']['max_filesize'],
     // '#value_callback' => 'file_field_widget_value',
     // '#process' => array_merge($element_info['#process'], array('file_field_widget_process')),
     // Allows this field to return an array instead of a single value.

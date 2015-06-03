@@ -78,6 +78,7 @@ function dropzones3_sign() {
   // This could be bypassed but makes things a little more difficult.
   $file = new stdClass();
   if (!($file->filename = $_POST['name']) || !($file->filesize = $_POST['size']) || !empty(file_validate($file, $current_element['#upload_validators']))) {
+    drupal_add_http_header('Status', '400 Bad Request');
     drupal_exit();
   }
   // Check for an upload location and make use of it.
@@ -86,7 +87,7 @@ function dropzones3_sign() {
   if (!empty($base_dir)) {
     $directory .= "$base_dir/";
   }
-  $uri = file_create_filename($file->filename, $directory) . '-' . md5(uniqid(mt_rand(), true));
+  $uri = file_create_filename($file->filename, $directory) . '-' . md5(uniqid(mt_rand(), TRUE));
   $key = file_uri_target($uri);
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
   $signature = _dropzones3_get_signature($date);
@@ -145,26 +146,45 @@ function dropzones3_notify() {
   if (isset($current_element['#upload_location']) && file_uri_target($current_element['#upload_location']) != '') {
     $base_dir = file_uri_target($current_element['#upload_location']) . '/';
   }
-
-  $file_exists = db_select('s3fs_file', 's')
-    ->fields('s', array('uri'))
-    ->condition('uri', $base_dir . $_POST['key'], '=')
-    ->condition('dir', 0, '=')
-    ->execute();
+  $uri = 's3://' . $base_dir . $_POST['key'];
 
   // We dont want to overwrite metadata for an existing file. A user could change
   // $_POST['key'] to point to a file they didnt own and gain access to it.
+  $file_exists = db_select('s3fs_file', 's')
+    ->fields('s')
+    ->condition('uri', $uri, '=')
+    ->execute();
   if ($file_exists->rowCount()) {
+    drupal_add_http_header('Status', '400 Bad Request');
     drupal_exit();
   }
+
+  // Store the file's metadata into s3fs's metadata cache.
+  try {
+    $wrapper = new S3fsStreamWrapper();
+    $wrapper->writeUriToCache($uri);
+  }
+  catch (Exception $e) {
+    watchdog_exception('dropzones3', $e);
+    drupal_add_http_header('Status', '500 Error');
+    drupal_exit();
+  }
+
+  // Actual filesize reported by s3. Delete file if it exceeds max size.
+  // Try to midigate 'fill up the bucket' attack.
+  $result = db_select('s3fs_file', 's')
+    ->fields('s', array('filesize'))
+    ->condition('uri', $uri, '=')
+    ->execute()
+    ->fetchAssoc();
 
   // Construct a Drupal file object.
   $file = new stdClass();
   $file->uid = $user->uid;
   $file->filename = $_POST['filename'];
-  $file->filesize = $_POST['filesize'];
+  $file->filesize = $result['filesize'];
   $file->filemime = $_POST['filemime'];
-  $file->uri = 's3://' . $base_dir . $_POST['key'];
+  $file->uri = $uri;
   $file->status = 0;
   $file->timestamp = REQUEST_TIME;
 
@@ -180,10 +200,13 @@ function dropzones3_notify() {
   // Clear the static loading cache.
   entity_get_controller('file')->resetCache(array($file->fid));
 
-  // Store the file's metadata into s3fs's metadata cache.
-  $wrapper = new S3fsStreamWrapper();
-  $wrapper->writeUriToCache($file->uri);
-  // Prepare to send JSON text to the browser.
+  if (!empty(file_validate($file, $current_element['#upload_validators']))) {
+    // Deletes file on s3 and all corresponding database entries.
+    file_delete($file);
+    drupal_add_http_header('Status', '400 Bad Request');
+    drupal_exit();
+  }
+
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
   print drupal_json_encode(array('fid' => $file->fid));
   drupal_exit();
