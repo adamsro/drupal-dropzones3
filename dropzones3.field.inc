@@ -11,8 +11,9 @@ function dropzones3_element_info() {
   $file_path = drupal_get_path('module', 'dropzones3');
   $config = _s3fs_get_config();
   $types['dropzones3'] = array(
-    '#value_callback' => 'file_managed_file_value',
-    '#element_validate' => array('file_managed_file_validate'),
+    '#input' => TRUE,
+    '#value_callback' => 'dropzones3_upload_value',
+    // '#element_validate' => array('file_managed_file_validate'),
     '#process' => array('dropzones3_element_process'),
     '#pre_render' => array('dropzones3_element_pre_render'),
     '#theme' => 'dropzones3',
@@ -20,6 +21,7 @@ function dropzones3_element_info() {
     // The S3 directory relative to the bucket root where files are uploaded.
     '#upload_location' => !empty($config['root_folder']) ? $config['root_folder'] : '',
     '#upload_validators' => array(),
+    '#preview_template' => '#dropzones3-item',
     '#extended' => TRUE,
     '#autostart' => TRUE,
     '#ssencrypt' => FALSE,
@@ -56,7 +58,12 @@ function dropzones3_element_process($element, &$form_state, $form) {
     'data' => array(
       'dzs3' => array(
         '#' . $element['#id'] => array(
+          // Drupal Specific used in notify function.
+          'drupalElementName' => $element['#name'],
+          'drupalFormId' => $form['#id'],
+
           'autoQueue' => $element['#autostart'],
+          'previewTemplate' => $element['#preview_template'],
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
             'region' => variable_get('dropzones3_aws_region'),
@@ -180,10 +187,8 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
       'file_validate_size' => array($max_filesize),
       'file_validate_extensions' => array($instance['settings']['file_extensions']),
     ),
+    '#value_callback' => 'dropzones3_field_widget_value',
     '#ssencrypt' => $instance['settings']['ssencrypt'],
-    // '#max_filesize' => $instance['settings']['max_filesize'],
-    // '#value_callback' => 'file_field_widget_value',
-    // '#process' => array_merge($element_info['#process'], array('file_field_widget_process')),
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
   );
@@ -206,4 +211,114 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     $element['#theme'] = 'file_widget_multiple';
   }
   return $element;
+}
+
+/**
+ * Callback #value_callback.
+ */
+function dropzones3_field_widget_value($element, $input = FALSE, $form_state = array()) {
+  if ($input) {
+    // Checkboxes lose their value when empty.
+    // If the display field is present make sure its unchecked value is saved.
+    $field = field_widget_field($element, $form_state);
+    if (empty($input['display'])) {
+      $input['display'] = $field['settings']['display_field'] ? 0 : 1;
+    }
+  }
+
+  // Handle uploads and the like.
+  $return = dropzones3_upload_value($element, $input, $form_state);
+
+  // Ensure that all the required properties are returned, even if empty.
+  $return += array(
+    'fid' => 0,
+    'display' => 1,
+    'description' => '',
+  );
+
+  return $return;
+}
+
+/**
+ * Callback #value_callback.
+ */
+function dropzones3_upload_value($element, $input = FALSE, $form_state = array()) {
+  global $user;
+  $return = array();
+  $parents_id = implode('_', $element['#parents']);
+
+  if (!empty($input['fid'])) {
+    // The input will have a non-zero fid only when saving the full node form.
+    // We don't want to do anything when that happens, because everything has
+    // already been done in the AJAX workflow.
+    return $input;
+  }
+
+  $remove_button_clicked = (isset($form_state['input']['_triggering_element_name'])
+    && $form_state['input']['_triggering_element_name'] == "{$parents_id}_remove_button");
+
+  // If there's valid input, save the new upload.
+  if ($input !== FALSE && !empty($input['filename']) && !$remove_button_clicked) {
+    $return = $input;
+    $base_dir = '';
+    if (isset($element['#upload_location']) && file_uri_target($element['#upload_location']) != '') {
+      $base_dir = file_uri_target($element['#upload_location']) . '/';
+    }
+    $uri = "s3://$base_dir{$input['filename']}";
+
+    // We dont want to overwrite metadata for an existing file. A user could change
+    // $_POST['key'] to point to a file they didnt own and gain access to it.
+    $file_exists = db_select('s3fs_file', 's')
+      ->fields('s')
+      ->condition('uri', $uri, '=')
+      ->execute();
+    if ($file_exists->rowCount()) {
+      drupal_add_http_header('Status', '400 Bad Request');
+      drupal_exit();
+    }
+
+    // Store the file's metadata into s3fs's metadata cache.
+    try {
+      $wrapper = new S3fsStreamWrapper();
+      $wrapper->writeUriToCache($uri);
+    }
+    catch (Exception $e) {
+      watchdog_exception('dropzones3', $e);
+      drupal_add_http_header('Status', '500 Error');
+      drupal_exit();
+    }
+
+    // Actual filesize reported by s3. Delete file if it exceeds max size.
+    // Try to midigate 'fill up the bucket' attack.
+    $result = db_select('s3fs_file', 's')
+      ->fields('s', array('filesize'))
+      ->condition('uri', $uri, '=')
+      ->execute()
+      ->fetchAssoc();
+
+    // Construct a Drupal file object.
+    $file = new stdClass();
+    $file->uid = $user->uid;
+    $file->filename = $_POST['filename'];
+    $file->filesize = $result['filesize'];
+    $file->filemime = file_get_mimetype($file->uri);
+    $file->uri = $uri;
+    $file->status = 0;
+    $file->timestamp = REQUEST_TIME;
+
+    // Save the uploaded file to the file_managed table.
+    module_invoke_all('file_presave', $file);
+    module_invoke_all('entity_presave', $file, 'file');
+
+    drupal_write_record('file_managed', $file);
+    // Inform modules about the newly added file.
+    module_invoke_all('file_insert', $file);
+    module_invoke_all('entity_insert', $file, 'file');
+
+    // Clear the static loading cache.
+    entity_get_controller('file')->resetCache(array($file->fid));
+    $return['fid'] = $file->fid;
+  }
+
+  return $return;
 }

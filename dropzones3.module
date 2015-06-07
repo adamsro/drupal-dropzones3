@@ -126,7 +126,7 @@ function _dropzones3_get_signature($date) {
 }
 
 /**
- * Ajax call to save reference to file stored in s3.
+ * Ajax endpoint saves a file once its been uploaded.
  */
 function dropzones3_notify() {
   global $user;
@@ -135,78 +135,8 @@ function dropzones3_notify() {
   $_POST['form_build_id'] = $form_build_id = (string) array_pop($form_parents);
   // Ensure form_build_id is valid.
   list($form, $form_state) = ajax_get_form();
-
-  // Get the current element and count the number of files.
-  $current_element = $form;
-  foreach ($form_parents as $parent) {
-    $current_element = $current_element[$parent];
-  }
-
-  $base_dir = '';
-  if (isset($current_element['#upload_location']) && file_uri_target($current_element['#upload_location']) != '') {
-    $base_dir = file_uri_target($current_element['#upload_location']) . '/';
-  }
-  $uri = 's3://' . $base_dir . $_POST['key'];
-
-  // We dont want to overwrite metadata for an existing file. A user could change
-  // $_POST['key'] to point to a file they didnt own and gain access to it.
-  $file_exists = db_select('s3fs_file', 's')
-    ->fields('s')
-    ->condition('uri', $uri, '=')
-    ->execute();
-  if ($file_exists->rowCount()) {
-    drupal_add_http_header('Status', '400 Bad Request');
-    drupal_exit();
-  }
-
-  // Store the file's metadata into s3fs's metadata cache.
-  try {
-    $wrapper = new S3fsStreamWrapper();
-    $wrapper->writeUriToCache($uri);
-  }
-  catch (Exception $e) {
-    watchdog_exception('dropzones3', $e);
-    drupal_add_http_header('Status', '500 Error');
-    drupal_exit();
-  }
-
-  // Actual filesize reported by s3. Delete file if it exceeds max size.
-  // Try to midigate 'fill up the bucket' attack.
-  $result = db_select('s3fs_file', 's')
-    ->fields('s', array('filesize'))
-    ->condition('uri', $uri, '=')
-    ->execute()
-    ->fetchAssoc();
-
-  // Construct a Drupal file object.
-  $file = new stdClass();
-  $file->uid = $user->uid;
-  $file->filename = $_POST['filename'];
-  $file->filesize = $result['filesize'];
-  $file->filemime = $_POST['filemime'];
-  $file->uri = $uri;
-  $file->status = 0;
-  $file->timestamp = REQUEST_TIME;
-
-  // Save the uploaded file to the file_managed table.
-  module_invoke_all('file_presave', $file);
-  module_invoke_all('entity_presave', $file, 'file');
-
-  drupal_write_record('file_managed', $file);
-  // Inform modules about the newly added file.
-  module_invoke_all('file_insert', $file);
-  module_invoke_all('entity_insert', $file, 'file');
-
-  // Clear the static loading cache.
-  entity_get_controller('file')->resetCache(array($file->fid));
-
-  if (!empty(file_validate($file, $current_element['#upload_validators']))) {
-    // Deletes file on s3 and all corresponding database entries.
-    file_delete($file);
-    drupal_add_http_header('Status', '400 Bad Request');
-    drupal_exit();
-  }
-
+  // Process user input. $form and $form_state are modified in the process.
+  drupal_process_form($form['#form_id'], $form, $form_state);
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
   print drupal_json_encode(array('fid' => $file->fid));
   drupal_exit();
