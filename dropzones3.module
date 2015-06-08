@@ -63,7 +63,7 @@ function dropzones3_menu() {
 function dropzones3_sign() {
   $form_parents = func_get_args();
   // Fucntion 'ajax_get_form' expects form_build_id in POST.
-  $_POST['form_build_id'] = $form_build_id = (string) array_pop($form_parents);
+  $_POST['form_build_id'] = (string) array_pop($form_parents);
 
   // Ensure form_build_id is valid.
   list($form, $form_state) = ajax_get_form();
@@ -87,15 +87,13 @@ function dropzones3_sign() {
   if (!empty($base_dir)) {
     $directory .= "$base_dir/";
   }
-  $uri = file_create_filename($file->filename, $directory) . '-' . md5(uniqid(mt_rand(), TRUE));
-  $key = file_uri_target($uri);
+  $uri = file_create_filename($file->filename . '-' . md5(uniqid(mt_rand(), TRUE)), $directory);
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
-  $signature = _dropzones3_get_signature($date);
 
   $data = array(
     "date" => $date->format('c'),
-    "signature" => $signature,
-    "key" => $key,
+    "signature" => _dropzones3_get_signature($date),
+    "key" => file_uri_target($uri),
   );
   // Prepare to send JSON text to the browser.
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
@@ -130,15 +128,12 @@ function _dropzones3_get_signature($date) {
  */
 function dropzones3_notify() {
   global $user;
-  $form_parents = func_get_args();
-  // Fucntion 'ajax_get_form' expects form_build_id in POST.
-  $_POST['form_build_id'] = $form_build_id = (string) array_pop($form_parents);
   // Ensure form_build_id is valid.
   list($form, $form_state) = ajax_get_form();
   // Process user input. $form and $form_state are modified in the process.
   drupal_process_form($form['#form_id'], $form, $form_state);
-  drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
-  print drupal_json_encode(array('fid' => $file->fid));
+  // drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
+  // print drupal_json_encode(array('fid' => $file->fid));
   drupal_exit();
 }
 

@@ -13,7 +13,7 @@ function dropzones3_element_info() {
   $types['dropzones3'] = array(
     '#input' => TRUE,
     '#value_callback' => 'dropzones3_upload_value',
-    // '#element_validate' => array('file_managed_file_validate'),
+    '#element_validate' => array('dropzones3_upload_validate'),
     '#process' => array('dropzones3_element_process'),
     '#pre_render' => array('dropzones3_element_pre_render'),
     '#theme' => 'dropzones3',
@@ -22,7 +22,7 @@ function dropzones3_element_info() {
     '#upload_location' => !empty($config['root_folder']) ? $config['root_folder'] : '',
     '#upload_validators' => array(),
     '#preview_template' => '#dropzones3-item',
-    '#extended' => TRUE,
+    '#extended' => FALSE,
     '#autostart' => TRUE,
     '#ssencrypt' => FALSE,
     '#description' => '',
@@ -41,6 +41,10 @@ function dropzones3_element_info() {
 function dropzones3_element_process($element, &$form_state, $form) {
   dropzones3_add_template("dropzones3-item", theme('dropzones3-item'));
 
+  $fid = isset($element['#value']['fid']) ? $element['#value']['fid'] : 0;
+  $element['#file'] = $fid ? file_load($fid) : FALSE;
+  $element['#tree'] = TRUE;
+
   // Dropzone expects a dot before all accepted extensions to
   // differentiate between accepted MIME types.
   $dot = function($string) {
@@ -53,13 +57,21 @@ function dropzones3_element_process($element, &$form_state, $form) {
   $signing_endpoint = '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'];
   $notifying_endpoint = '/js/dropzones3/notify/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'];
 
+  // Get element name without the last element since we'll add it in JS.
+  $parents = $element['#parents'];
+  $name = array_shift($parents);
+  if (count($parents) > 1) {
+    array_pop($parents);
+    $name .= '[' . implode('][', $parents) . ']';
+  }
+
   $element['#attached']['js'][] = array(
     'type' => 'setting',
     'data' => array(
       'dzs3' => array(
         '#' . $element['#id'] => array(
           // Drupal Specific used in notify function.
-          'drupalElementName' => $element['#name'],
+          'drupalElementParents' => $name,
           'drupalFormId' => $form['#id'],
 
           'autoQueue' => $element['#autostart'],
@@ -169,8 +181,6 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     'description' => '',
   );
 
-  $max_filesize = parse_size($instance['settings']['max_filesize']);
-
   // Load the items for form rebuilds from the field state as they might not be
   // in $form_state['values'] because of validation limitations. Also, they are
   // only passed in as $items when editing existing entities.
@@ -184,7 +194,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     '#upload_location' => $instance['settings']['file_directory'],
     '#upload_validators' => array(
       'file_validate_name_length' => array(),
-      'file_validate_size' => array($max_filesize),
+      'file_validate_size' => array(parse_size($instance['settings']['max_filesize'])),
       'file_validate_extensions' => array($instance['settings']['file_extensions']),
     ),
     '#value_callback' => 'dropzones3_field_widget_value',
@@ -199,18 +209,29 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     if (empty($element['#default_value']['fid'])) {
       $element['#description'] = theme('file_upload_help', array('description' => $element['#description'], 'upload_validators' => $element['#upload_validators']));
     }
+    $elements = array($element);
   }
   else {
     foreach ($items as $item) {
-      $element['#children'][$delta] = $element;
-      $element['#children'][$delta]['#default_value'] = $item;
-      $element['#children'][$delta]['#weight'] = $delta;
+      $elements['#children'][$delta] = $element;
+      $elements['#children'][$delta]['#default_value'] = $item;
+      $elements['#children'][$delta]['#weight'] = $delta;
       $delta++;
     }
-    $element['#file_upload_delta'] = $delta;
-    $element['#theme'] = 'file_widget_multiple';
+    $elements['#file_upload_delta'] = $delta;
+    $elements['#theme'] = 'file_widget_multiple';
   }
-  return $element;
+  return $elements;
+}
+
+/**
+ * Validation callback for dropzones3 element type.
+ */
+function dropzones3_upload_validate(&$element, &$form_state) {
+  // Consolidate the array value of this field to a single FID.
+  if (!$element['#extended']) {
+    form_set_value($element, $element['fid']['#value'], $form_state);
+  }
 }
 
 /**
@@ -258,51 +279,16 @@ function dropzones3_upload_value($element, $input = FALSE, $form_state = array()
     && $form_state['input']['_triggering_element_name'] == "{$parents_id}_remove_button");
 
   // If there's valid input, save the new upload.
-  if ($input !== FALSE && !empty($input['filename']) && !$remove_button_clicked) {
+  if ($input !== FALSE && !$remove_button_clicked) {
     $return = $input;
-    $base_dir = '';
-    if (isset($element['#upload_location']) && file_uri_target($element['#upload_location']) != '') {
-      $base_dir = file_uri_target($element['#upload_location']) . '/';
-    }
-    $uri = "s3://$base_dir{$input['filename']}";
-
-    // We dont want to overwrite metadata for an existing file. A user could change
-    // $_POST['key'] to point to a file they didnt own and gain access to it.
-    $file_exists = db_select('s3fs_file', 's')
-      ->fields('s')
-      ->condition('uri', $uri, '=')
-      ->execute();
-    if ($file_exists->rowCount()) {
-      drupal_add_http_header('Status', '400 Bad Request');
-      drupal_exit();
-    }
-
-    // Store the file's metadata into s3fs's metadata cache.
-    try {
-      $wrapper = new S3fsStreamWrapper();
-      $wrapper->writeUriToCache($uri);
-    }
-    catch (Exception $e) {
-      watchdog_exception('dropzones3', $e);
-      drupal_add_http_header('Status', '500 Error');
-      drupal_exit();
-    }
-
-    // Actual filesize reported by s3. Delete file if it exceeds max size.
-    // Try to midigate 'fill up the bucket' attack.
-    $result = db_select('s3fs_file', 's')
-      ->fields('s', array('filesize'))
-      ->condition('uri', $uri, '=')
-      ->execute()
-      ->fetchAssoc();
 
     // Construct a Drupal file object.
     $file = new stdClass();
     $file->uid = $user->uid;
-    $file->filename = $_POST['filename'];
-    $file->filesize = $result['filesize'];
-    $file->filemime = file_get_mimetype($file->uri);
-    $file->uri = $uri;
+    $file->filename = $input['filename'];
+    $file->filesize = $input['filesize'];
+    $file->filemime = file_get_mimetype($input['filename']);
+    $file->uri = "s3://" . $input['key'];
     $file->status = 0;
     $file->timestamp = REQUEST_TIME;
 
@@ -318,6 +304,9 @@ function dropzones3_upload_value($element, $input = FALSE, $form_state = array()
     // Clear the static loading cache.
     entity_get_controller('file')->resetCache(array($file->fid));
     $return['fid'] = $file->fid;
+
+    $wrapper = new S3fsStreamWrapper();
+    $wrapper->writeUriToCache($file->uri);
   }
 
   return $return;
