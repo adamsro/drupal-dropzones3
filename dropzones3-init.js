@@ -9,22 +9,30 @@
 
           // Custom notify function called from emitter in DropzoneS3.prototype.finishUpload.
           settings.dzs3[selector].notify = function(file, done) {
+            file.delta = this.files.length - 1;
             var _this = this,
               xhr = new XMLHttpRequest(),
-              field = this.options.drupalElementParents + "[" + completed + "]";
+              field = this.options.drupalElementParents + "[" + file.delta + "]";
               formData = new FormData(document.getElementById(this.options.drupalFormId));
 
               formData.append(field + "[filename]", file.name);
               formData.append(field + "[filesize]", file.size);
               formData.append(field + "[key]", file.upload.auth.key);
               formData.append(field + "[fid]", 0);
-              formData.append(field + "[display]", 1);
-              formData.append(field + "[_weight]", completed);
+              formData.append(field + "[_weight]", file.delta);
+
+              formData.append('_triggering_element_name', this.options.drupalTriggeringName);
+              formData.append('_triggering_element_value', this.options.drupalTriggeringValue);
 
             xhr.onload = function() {
             if (xhr.status / 100 == 2) {
-              completed++;
-              done(file);
+              try {
+                var item = JSON.parse(xhr.responseText);
+                file.fid = item.fid;
+                done(file);
+              } catch (ex) {
+                _this._fatalError(file, ex.message);
+              }
             } else if (xhr.status / 100 == 5) {
               // Hopefully a temporary server error
               return _this._recoverableError(file, xhr);
@@ -42,7 +50,23 @@
             xhr.send(formData);
           };
 
-          new DropzoneS3(selector, settings.dzs3[selector]);
+          // Add the fid so file is associated with form.
+          settings.dzs3[selector].success = function(file) {
+            if (file.previewElement) {
+              file.previewElement.classList.add("dzs3-success");
+            }
+            _ref = file.previewElement.querySelectorAll("[data-dzs3-name]");
+          var fid = file.previewElement.querySelectorAll("[data-drupal-fid]");
+            for (var i = fid.length - 1; i >= 0; i--) {
+              fid[i].name = this.options.drupalElementParents + "[" + file.delta + "]";
+              fid[i].value = file.fid;
+            };
+          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+            node = _ref[_i];
+            node.textContent = file.name;
+          }
+          };
+            new DropzoneS3(selector, settings.dzs3[selector]);
         });
       });
     }

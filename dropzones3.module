@@ -81,19 +81,23 @@ function dropzones3_sign() {
     drupal_add_http_header('Status', '400 Bad Request');
     drupal_exit();
   }
-  // Check for an upload location and make use of it.
-  $base_dir = file_uri_target($current_element["#upload_location"]);
-  $directory = 's3://';
-  if (!empty($base_dir)) {
-    $directory .= "$base_dir/";
+  $config = _s3fs_get_config();
+  $key = '';
+  if (!empty($config['root_folder'])) {
+    $key = "{$config['root_folder']}/$key";
   }
-  $uri = file_create_filename($file->filename . '-' . md5(uniqid(mt_rand(), TRUE)), $directory);
+  // Check for an upload location and make use of it.
+  if (isset($form["#upload_location"])) {
+    $key .= '/' . file_uri_target($form["#upload_location"]);
+  }
+  // Use file_create_filename() to avoid overwriting an existing file.
+  $key = file_create_filename($file->filename, $key);
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
 
   $data = array(
     "date" => $date->format('c'),
     "signature" => _dropzones3_get_signature($date),
-    "key" => file_uri_target($uri),
+    "key" => $key,
   );
   // Prepare to send JSON text to the browser.
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
@@ -132,8 +136,8 @@ function dropzones3_notify() {
   list($form, $form_state) = ajax_get_form();
   // Process user input. $form and $form_state are modified in the process.
   drupal_process_form($form['#form_id'], $form, $form_state);
-  // drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
-  // print drupal_json_encode(array('fid' => $file->fid));
+  drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
+  print drupal_json_encode(array('fid' => 0));
   drupal_exit();
 }
 
