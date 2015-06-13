@@ -135,13 +135,26 @@ function _dropzones3_get_signature($date) {
  * Ajax endpoint saves a file once its been uploaded.
  */
 function dropzones3_notify() {
-  global $user;
+  $form_parents = func_get_args();
+  // $form_build_id = (string) array_pop($form_parents);
+
   // Ensure form_build_id is valid.
   list($form, $form_state) = ajax_get_form();
+
+  // Get the current element and count the number of files.
+  $current_element = $form;
+  foreach ($form_parents as $parent) {
+    $current_element = $current_element[$parent];
+  }
+  $current_file_count = isset($current_element['#file_upload_delta']) ? $current_element['#file_upload_delta'] : 0;
+
   // Process user input. $form and $form_state are modified in the process.
   drupal_process_form($form['#form_id'], $form, $form_state);
+
+  $input = drupal_array_get_nested_value($form_state['values'], $form_parents);
+
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
-  print drupal_json_encode(array('fid' => 0));
+  print drupal_json_encode(array('fid' => $input['fid']));
   drupal_exit();
 }
 

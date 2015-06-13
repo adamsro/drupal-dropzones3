@@ -204,7 +204,7 @@ function dropzones3_upload_value($element, $input = FALSE, $form_state = array()
   // But just in case, I'm going to leave it around for now.
   // Find the current value of this field from the form state, if it's there.
   $form_state_fid = $form_state['values'];
-  foreach ($parents as $parent) {
+  foreach ($element['#parents'] as $parent) {
     $form_state_fid = isset($form_state_fid[$parent]) ? $form_state_fid[$parent] : 0;
   }
   if ($element['#extended'] && isset($form_state_fid['fid'])) {
@@ -223,11 +223,10 @@ function dropzones3_upload_value($element, $input = FALSE, $form_state = array()
     $file->uid = $user->uid;
     $file->filename = $input['filename'];
     $file->filesize = $input['filesize'];
-    $file->filemime = file_get_mimetype($input['filename']);
+    $file->filemime = $input['filemime'];
     $file->uri = "s3://" . $input['key'];
     $file->status = 0;
     $file->timestamp = REQUEST_TIME;
-
     // Save the uploaded file to the file_managed table.
     module_invoke_all('file_presave', $file);
     module_invoke_all('entity_presave', $file, 'file');
@@ -239,10 +238,11 @@ function dropzones3_upload_value($element, $input = FALSE, $form_state = array()
 
     // Clear the static loading cache.
     entity_get_controller('file')->resetCache(array($file->fid));
+
     $return['fid'] = $file->fid;
 
     $wrapper = new S3fsStreamWrapper();
-    $wrapper->writeUriToCache($file->uri);
+    $wrapper->writeUriToCache($input['key']);
   }
 
   if (empty($input) || $remove_button_clicked) {
@@ -321,8 +321,8 @@ function dropzones3_element_process($element, &$form_state, $form) {
     $extension_list = implode(',', array_map($dot, array_filter(explode(' ', $element['#upload_validators']['file_validate_extensions'][0]))));
   }
 
-  $signing_endpoint = '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'];
-  $notifying_endpoint = '/js/dropzones3/notify/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'];
+  $signing_endpoint =
+  // $notifying_endpoint =
 
   // Get element name without the last element since we'll add it in JS.
   $parents = $element['#parents'];
@@ -331,20 +331,22 @@ function dropzones3_element_process($element, &$form_state, $form) {
     array_pop($parents);
     $name .= '[' . implode('][', $parents) . ']';
   }
+  $parents = $element['#parents'];
+  array_pop($parents);
 
   $element['#attached']['js'][] = array(
     'type' => 'setting',
     'data' => array(
       'dzs3' => array(
         '#' . $element['#id'] => array(
-          // Drupal Specific used in notify function.
-          'drupalElementParents' => $name,
-          'drupalFormId' => $form['#id'],
-          'drupalTriggeringName' => $element['upload_button']['#name'],
-          'drupalTriggeringValue' => $element['upload_button']['#value'],
 
-          'autoQueue' => $element['#autostart'],
-          'previewTemplate' => $element['#preview_template'],
+          // Drupal Specific used in notify function.
+          'drupal' => array(
+            'elementParents' => $parents,
+            'formId' => $form['#id'],
+            'triggeringName' => $element['upload_button']['#name'],
+            'triggeringValue' => $element['upload_button']['#value'],
+          ),
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
             'region' => variable_get('dropzones3_aws_region'),
@@ -352,12 +354,14 @@ function dropzones3_element_process($element, &$form_state, $form) {
             'ssencrypt' => $element['#server_side_encrypt'],
           ),
           'signing' => array(
-            'endpoint' => $signing_endpoint,
+            'endpoint' => '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'],
             'ssencrypt' => (bool) $element['#server_side_encrypt'],
           ),
           'notifying' => array(
-            'endpoint' => $notifying_endpoint,
+            'endpoint' => '/js/dropzones3/notify'
           ),
+          'autoQueue' => $element['#autostart'],
+          'previewTemplate' => $element['#preview_template'],
           'validation' => array(
             // 'maxFiles' => $element['#max_files'],
             // Convert bytes to KB to MB.
