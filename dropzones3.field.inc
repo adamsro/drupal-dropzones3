@@ -287,7 +287,6 @@ function dropzones3_element_process($element, &$form_state, $form) {
     '#validate' => array(),
     '#submit' => array('file_field_widget_submit', 'dropzones3_element_submit'),
     '#limit_validation_errors' => array($element['#parents']),
-    '#ajax' => TRUE,
     '#weight' => -5,
   );
   $element['remove_button'] = array(
@@ -298,7 +297,6 @@ function dropzones3_element_process($element, &$form_state, $form) {
     '#limit_validation_errors' => array($element['#parents']),
     '#attributes' => array('class' => array('cors-form-remove')),
     '#weight' => -5,
-    '#submit' => array('s3fs_cors_remove_submit'),
   );
 
   $form_state['cache'] = TRUE;
@@ -384,9 +382,9 @@ function dropzones3_element_pre_render($element) {
     drupal_set_message("Library 'Dropzone S3' not found.", 'error');
   }
 
-  // $element['upload_button']['#access'] = FALSE;
+  $element['upload_button']['#access'] = FALSE;
   $element['remove_button']['#access'] = FALSE;
-  // hide($element['upload_button']);
+  hide($element['upload_button']);
   hide($element['remove_button']);
 
   return $element;

@@ -82,22 +82,26 @@ function dropzones3_sign() {
     drupal_exit();
   }
   $config = _s3fs_get_config();
-  $key = '';
+  $directory = '';
   if (!empty($config['root_folder'])) {
-    $key = "{$config['root_folder']}/$key";
+    $directory =  trim($config['root_folder'], '\/');
   }
   // Check for an upload location and make use of it.
   if (isset($form["#upload_location"])) {
-    $key .= '/' . file_uri_target($form["#upload_location"]);
+    $directory .= '/' . trim($form["#upload_location"], '\/');
   }
-  // Use file_create_filename() to avoid overwriting an existing file.
-  $key = file_create_filename($file->filename, $key);
+  // Strip control characters (ASCII value < 32). Though these are allowed in
+  // some filesystems, not many applications handle them well.
+  $file->filename = preg_replace('/[\x00-\x1F]/u', '_', $file->filename);
+  // Use hash instead of file_create_filename because a key may be used in s3
+  // but not yet registered with Drupal, e.g. an abandoned multipart upload.
+  $file->filename .= '-' . md5(microtime());
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
 
   $data = array(
     "date" => $date->format('c'),
     "signature" => _dropzones3_get_signature($date),
-    "key" => $key,
+    "key" => $directory . '/' . $file->filename,
   );
   // Prepare to send JSON text to the browser.
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
