@@ -17,4 +17,7 @@
     <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" version="1.1"><title>Continue</title><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><path d="M27 53C41.4 53 53 41.4 53 27 53 12.6 41.4 1 27 1 12.6 1 1 12.6 1 27 1 41.4 12.6 53 27 53ZM16.9 19.9L13.2 19.9 13.2 33.9 16.9 33.9 16.9 19.9 16.9 19.9ZM19.9 19.9L29.1 19.9 29 13.6C29 12 30 11.5 31.3 12.6L46.4 25.1C47.7 26.1 47.7 27.8 46.4 28.9L31.6 41.1C30.3 42.1 29.2 41.6 29.2 40L29.2 33.9 29.2 33.9 19.9 33.9 19.9 19.9 19.9 19.9ZM10.2 19.9L10 19.9C8.3 19.9 7 21.2 7 22.9L7 30.9C7 32.5 8.3 33.9 10 33.9L10.2 33.9 10.2 19.9Z" stroke-opacity="0.2" stroke="#747474" fill-opacity="0.8" fill="#FFFFFF"/></g></svg>
   </div>
   <input type="hidden" name="" value="" data-drupal-fid>
+  <input type="hidden" name="" value="" data-drupal-filename>
+  <input type="hidden" name="" value="" data-drupal-filesize>
+  <input type="hidden" name="" value="" data-drupal-filemime>
 </div>

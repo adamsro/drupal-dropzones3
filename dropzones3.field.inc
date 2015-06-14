@@ -111,7 +111,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     $items = $field_state['items'];
   }
   // $element_info = element_info('dropzones3');
-  $element = array(
+  $element += array(
     '#type' => 'dropzones3',
     '#upload_location' => $instance['settings']['file_directory'],
     '#upload_validators' => array(
@@ -142,6 +142,10 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   $elements['#file_upload_delta'] = $delta;
   // $elements['#theme'] = 'file_widget_multiple';
   $elements['#description'] = theme('file_upload_help', array('description' => $element['#description'], 'upload_validators' => $element['#upload_validators']));
+  $elements['#title'] = $element['#title'];
+  $elements['#field_name'] = $element['#field_name'];
+  $elements['#language'] = $element['#language'];
+  $elements['#display_field'] = $field['settings']['display_field'];
 
   return $elements;
 }
@@ -321,7 +325,7 @@ function dropzones3_element_process($element, &$form_state, $form) {
     $extension_list = implode(',', array_map($dot, array_filter(explode(' ', $element['#upload_validators']['file_validate_extensions'][0]))));
   }
 
-  $signing_endpoint =
+  // $signing_endpoint =
   // $notifying_endpoint =
 
   // Get element name without the last element since we'll add it in JS.
@@ -344,7 +348,7 @@ function dropzones3_element_process($element, &$form_state, $form) {
           'drupal' => array(
             'elementParents' => $parents,
             'formId' => $form['#id'],
-            'triggeringName' => $element['upload_button']['#name'],
+            // 'triggeringName' => $element['upload_button']['#name'],
             'triggeringValue' => $element['upload_button']['#value'],
           ),
           's3' => array(
@@ -368,6 +372,7 @@ function dropzones3_element_process($element, &$form_state, $form) {
             'maxFilesize' => $element['#upload_validators']['file_validate_size'][0] / 1024 / 1024,
             'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
           ),
+          'resuming' => array('automaticRetry' => false),
         ),
       ),
     ),

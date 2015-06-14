@@ -9,10 +9,12 @@
 
           // Custom notify function called from emitter in DropzoneS3.prototype.finishUpload.
           settings.dzs3[selector].notify = function(file, done) {
-            file.delta = this.files.length - 1;
-            var _this = this, xhr = new XMLHttpRequest(), _ref0 = this.options.drupal.elementParents.slice();
-            var endpoint = _this.options.notifying.endpoint + "/" + _ref0.join("/") + "/" + file.delta;
-            var field = _ref0.shift() + "[" + _ref0.join("][") + "][" + file.delta + "]";
+            var _this = this,
+              xhr = new XMLHttpRequest(),
+              _ref0 = this.options.drupal.elementParents.slice(),
+              _ref1 = this.options.drupal.elementParents.slice(),
+              field = _ref0.shift() + "[" + _ref0.join("][") + "][" + file.delta + "]",
+              endpoint = _this.options.notifying.endpoint + "/" + _ref1.join("/") + "/" + file.delta;
 
             formData = new FormData(document.getElementById(this.options.drupal.formId));
             formData.append(field + "[filename]", file.name);
@@ -22,7 +24,7 @@
             formData.append(field + "[fid]", 0);
             formData.append(field + "[_weight]", file.delta);
 
-            formData.append('_triggering_element_name', this.options.drupal.triggeringName);
+            formData.append('_triggering_element_name', _ref1.join("_") + "_" + file.delta + "_upload_button");
             formData.append('_triggering_element_value', this.options.drupal.triggeringValue);
 
             xhr.onload = function() {
@@ -55,18 +57,30 @@
           settings.dzs3[selector].success = function(file) {
             var _ref0 = this.options.drupal.elementParents.slice(),
               field = _ref0.shift() + "[" + _ref0.join("][") + "][" + file.delta + "]";
+
             if (file.previewElement) {
               file.previewElement.classList.add("dzs3-success");
             }
-            _ref = file.previewElement.querySelectorAll("[data-dzs3-name]");
+
             var fid = file.previewElement.querySelectorAll("[data-drupal-fid]");
             for (var i = fid.length - 1; i >= 0; i--) {
-              fid[i].name = field;
+              fid[i].name = field + "[fid]";
               fid[i].value = file.fid;
             }
-            for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-              node = _ref[_i];
-              node.textContent = file.name;
+            var filename = file.previewElement.querySelectorAll("[data-drupal-filename]");
+            for (var j = filename.length - 1; j >= 0; j--) {
+              filename[j].name = field + "[filename]";
+              filename[j].value = file.name;
+            }
+            var filesize = file.previewElement.querySelectorAll("[data-drupal-filesize]");
+            for (var k = filesize.length - 1; k >= 0; k--) {
+              filesize[k].name = field + "[filesize]";
+              filesize[k].value = file.size;
+            }
+            var filemime = file.previewElement.querySelectorAll("[data-drupal-filemime]");
+            for (var l = filemime.length - 1; l >= 0; l--) {
+              filemime[l].name = field + "[filemime]";
+              filemime[l].value = file.type;
             }
           };
           new DropzoneS3(selector, settings.dzs3[selector]);
