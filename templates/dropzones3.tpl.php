@@ -4,7 +4,6 @@
  * Template file for Dropzone S3 Widget.
  */
 ?>
-<?php // print render($element['upload_button']); ?>
 <div id="<?php print $element['#id']; ?>" class="dzs3">
   <div class="dzs3-message">
   <?php print $element['#message']; ?>

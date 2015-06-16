@@ -110,7 +110,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   if (isset($field_state['items'])) {
     $items = $field_state['items'];
   }
-  // $element_info = element_info('dropzones3');
+  $element_info = element_info('dropzones3');
   $element += array(
     '#type' => 'dropzones3',
     '#upload_location' => $instance['settings']['file_directory'],
@@ -121,6 +121,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     ),
     '#value_callback' => 'dropzones3_field_widget_value',
     '#ssencrypt' => $instance['settings']['ssencrypt'],
+    '#process' => array_merge($element_info['#process'], array('dropzones3_widget_process')),
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
   );
@@ -141,6 +142,8 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   }
   $elements['#file_upload_delta'] = $delta;
   // $elements['#theme'] = 'file_widget_multiple';
+  // $elements['#theme_wrappers'] = array('fieldset');
+  // $elements['#process'] = array('file_field_widget_process_multiple');
   $elements['#description'] = theme('file_upload_help', array('description' => $element['#description'], 'upload_validators' => $element['#upload_validators']));
   $elements['#title'] = $element['#title'];
   $elements['#field_name'] = $element['#field_name'];
@@ -279,7 +282,6 @@ function dropzones3_element_process($element, &$form_state, $form) {
   $fid = isset($element['#value']['fid']) ? $element['#value']['fid'] : 0;
   $element['#file'] = $fid ? file_load($fid) : FALSE;
   $element['#tree'] = TRUE;
-  // $parents_id = implode('_', $element['#parents']);
 
   dropzones3_add_template("dropzones3-item", theme('dropzones3-item'));
 
@@ -289,7 +291,7 @@ function dropzones3_element_process($element, &$form_state, $form) {
     '#type' => 'submit',
     '#value' => t('Start Upload'),
     '#validate' => array(),
-    '#submit' => array('file_field_widget_submit', 'dropzones3_element_submit'),
+    '#submit' => array('dropzones3_element_submit'),
     '#limit_validation_errors' => array($element['#parents']),
     '#weight' => -5,
   );
@@ -298,8 +300,8 @@ function dropzones3_element_process($element, &$form_state, $form) {
     '#type' => 'submit',
     '#value' => t('Remove'),
     '#validate' => array(),
+    '#submit' => array('dropzones3_element_submit'),
     '#limit_validation_errors' => array($element['#parents']),
-    '#attributes' => array('class' => array('cors-form-remove')),
     '#weight' => -5,
   );
 
@@ -325,30 +327,16 @@ function dropzones3_element_process($element, &$form_state, $form) {
     $extension_list = implode(',', array_map($dot, array_filter(explode(' ', $element['#upload_validators']['file_validate_extensions'][0]))));
   }
 
-  // $signing_endpoint =
-  // $notifying_endpoint =
-
-  // Get element name without the last element since we'll add it in JS.
-  $parents = $element['#parents'];
-  $name = array_shift($parents);
-  if (count($parents) > 1) {
-    array_pop($parents);
-    $name .= '[' . implode('][', $parents) . ']';
-  }
-  $parents = $element['#parents'];
-  array_pop($parents);
-
   $element['#attached']['js'][] = array(
     'type' => 'setting',
     'data' => array(
       'dzs3' => array(
         '#' . $element['#id'] => array(
-
           // Drupal Specific used in notify function.
           'drupal' => array(
-            'elementParents' => $parents,
+            // Get element name without the last element since we'll add it in JS.
+            'elementParents' => array_slice($element['#parents'], 0, -1),
             'formId' => $form['#id'],
-            // 'triggeringName' => $element['upload_button']['#name'],
             'triggeringValue' => $element['upload_button']['#value'],
           ),
           's3' => array(
@@ -380,6 +368,23 @@ function dropzones3_element_process($element, &$form_state, $form) {
   return $element;
 }
 
+
+/**
+ * An element #process callback for the file_generic field type.
+ *
+ * Expands the file_generic type to include the description and display fields.
+ */
+function dropzones3_widget_process($element, &$form_state, $form) {
+  // Add another submit handler to the upload and remove buttons, to implement
+  // functionality needed by the field widget. This submit handler, along with
+  // the rebuild logic in file_field_widget_form() requires the entire field,
+  // not just the individual item, to be valid.
+  foreach (array('upload_button', 'remove_button') as $key) {
+    $element[$key]['#submit'][] = 'file_field_widget_submit';
+    $element[$key]['#limit_validation_errors'] = array(array_slice($element['#parents'], 0, -1));
+  }
+  return $element;
+}
 /**
  * The #pre_render callback for element.
  */
