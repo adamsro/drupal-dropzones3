@@ -167,14 +167,19 @@ function dropzones3_theme($existing, $type, $theme, $path) {
     'dropzones3_template' => array(
       'render element' => 'template',
     ),
-    'dropzones3' => array(
+    'dropzones3-container' => array(
       'render element' => 'element',
-      'template' => 'dropzones3',
+      'template' => 'dropzones3-container',
       'path' => $module_path . '/templates',
     ),
     'dropzones3-item' => array(
       'render element' => 'element',
       'template' => 'dropzones3-item',
+      'path' => $module_path . '/templates',
+    ),
+    'dropzones3-item-client' => array(
+      'render element' => 'element',
+      'template' => 'dropzones3-item-client',
       'path' => $module_path . '/templates',
     ),
   );

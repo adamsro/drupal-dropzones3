@@ -8,7 +8,6 @@
  * Implements hook_element_info().
  */
 function dropzones3_element_info() {
-  $file_path = drupal_get_path('module', 'dropzones3');
   $config = _s3fs_get_config();
   $types['dropzones3'] = array(
     '#input' => TRUE,
@@ -16,21 +15,15 @@ function dropzones3_element_info() {
     '#element_validate' => array('dropzones3_upload_validate'),
     '#process' => array('dropzones3_element_process'),
     '#pre_render' => array('dropzones3_element_pre_render'),
-    '#theme' => 'dropzones3',
-    '#message' => t('Drop files here or click to upload.'),
+    '#theme' => 'dropzones3-item',
     // The S3 directory relative to the bucket root where files are uploaded.
     '#upload_location' => !empty($config['root_folder']) ? $config['root_folder'] : '',
     '#upload_validators' => array(),
-    '#preview_template' => '#dropzones3-item',
+    '#upload_button_value' => t('Upload'),
     '#extended' => FALSE,
     '#autostart' => TRUE,
     '#ssencrypt' => FALSE,
     '#description' => '',
-    '#attached' => array(
-      'js' => array(
-        $file_path . '/dropzones3-init.js',
-      ),
-    ),
   );
   return $types;
 }
@@ -75,13 +68,13 @@ function dropzones3_field_widget_settings_form($field, $instance) {
   $form['autostart'] = array(
     '#type' => 'checkbox',
     '#title' => t('Start uploading as soon as files are added?'),
-    '#default_value' => $settings['autostart'],
+    '#default_value' => $settings['autostart'] ? $settings['autostart'] : TRUE,
     '#description' => t('When checked, upload will start as soon as files are added without requiring to click <em>Upload</em>, unless some of the added files did not pass validation.'),
   );
   $form['ssencrypt'] = array(
     '#type' => 'checkbox',
     '#title' => t('Server Side Encryption'),
-    '#default_value' => $settings['ssencrypt'],
+    '#default_value' => $settings['ssencrypt'] ? $settings['ssencrypt'] : FALSE,
     '#description' => t("Send header 'x-amz-server-side-encryption':'AES256' with requests."),
   );
   $form['message'] = array(
@@ -97,6 +90,7 @@ function dropzones3_field_widget_settings_form($field, $instance) {
  */
 function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
 
+  $elements = array();
   $defaults = array(
     'fid' => 0,
     'display' => !empty($field['settings']['display_default']),
@@ -122,6 +116,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     '#value_callback' => 'dropzones3_field_widget_value',
     '#ssencrypt' => $instance['settings']['ssencrypt'],
     '#process' => array_merge($element_info['#process'], array('dropzones3_widget_process')),
+    '#upload_button_value' => $element_info['#upload_button_value'],
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
   );
@@ -141,14 +136,21 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     $elements[$delta]['#required'] = ($element['#required'] && $delta == 0);
   }
   $elements['#file_upload_delta'] = $delta;
-  // $elements['#theme'] = 'file_widget_multiple';
-  // $elements['#theme_wrappers'] = array('fieldset');
-  // $elements['#process'] = array('file_field_widget_process_multiple');
+  $elements['#theme'] = 'dropzones3-container';
+  $elements['#pre_render'] = array('dropzones3_widget_pre_render');
+  $elements['#upload_button_value'] = $element_info['#upload_button_value'];
+  $elements['#process'] = array('dropzones3_widget_container_process');
   $elements['#description'] = theme('file_upload_help', array('description' => $element['#description'], 'upload_validators' => $element['#upload_validators']));
   $elements['#title'] = $element['#title'];
   $elements['#field_name'] = $element['#field_name'];
   $elements['#language'] = $element['#language'];
   $elements['#display_field'] = $field['settings']['display_field'];
+  $file_path = drupal_get_path('module', 'dropzones3');
+  $elements['#attached'] = array(
+    'js' => array(
+      $file_path . '/dropzones3-init.js',
+    ),
+  );
 
   return $elements;
 }
@@ -283,13 +285,11 @@ function dropzones3_element_process($element, &$form_state, $form) {
   $element['#file'] = $fid ? file_load($fid) : FALSE;
   $element['#tree'] = TRUE;
 
-  dropzones3_add_template("dropzones3-item", theme('dropzones3-item'));
-
   // Set up the buttons first since we need to check if they were clicked.
   $element['upload_button'] = array(
     '#name' => implode('_', $element['#parents']) . '_upload_button',
     '#type' => 'submit',
-    '#value' => t('Start Upload'),
+    '#value' => $element['upload_button_value'],
     '#validate' => array(),
     '#submit' => array('dropzones3_element_submit'),
     '#limit_validation_errors' => array($element['#parents']),
@@ -318,53 +318,6 @@ function dropzones3_element_process($element, &$form_state, $form) {
     $form["#{$element['upload_button']['#name']}_location"] = $element['#upload_location'];
   }
 
-  // Dropzone expects a dot before all accepted extensions to
-  // differentiate between accepted MIME types.
-  $dot = function($string) {
-    return '.' . $string;
-  };
-  if (isset($element['#upload_validators']['file_validate_extensions'][0])) {
-    $extension_list = implode(',', array_map($dot, array_filter(explode(' ', $element['#upload_validators']['file_validate_extensions'][0]))));
-  }
-
-  $element['#attached']['js'][] = array(
-    'type' => 'setting',
-    'data' => array(
-      'dzs3' => array(
-        '#' . $element['#id'] => array(
-          // Drupal Specific used in notify function.
-          'drupal' => array(
-            // Get element name without the last element since we'll add it in JS.
-            'elementParents' => array_slice($element['#parents'], 0, -1),
-            'formId' => $form['#id'],
-            'triggeringValue' => $element['upload_button']['#value'],
-          ),
-          's3' => array(
-            'accesskey' => variable_get('dropzones3_aws_access_key'),
-            'region' => variable_get('dropzones3_aws_region'),
-            'bucket' => variable_get('dropzones3_aws_bucket'),
-            'ssencrypt' => $element['#server_side_encrypt'],
-          ),
-          'signing' => array(
-            'endpoint' => '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'],
-            'ssencrypt' => (bool) $element['#server_side_encrypt'],
-          ),
-          'notifying' => array(
-            'endpoint' => '/js/dropzones3/notify'
-          ),
-          'autoQueue' => $element['#autostart'],
-          'previewTemplate' => $element['#preview_template'],
-          'validation' => array(
-            // 'maxFiles' => $element['#max_files'],
-            // Convert bytes to KB to MB.
-            'maxFilesize' => $element['#upload_validators']['file_validate_size'][0] / 1024 / 1024,
-            'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
-          ),
-          'resuming' => array('automaticRetry' => false),
-        ),
-      ),
-    ),
-  );
   return $element;
 }
 
@@ -385,10 +338,78 @@ function dropzones3_widget_process($element, &$form_state, $form) {
   }
   return $element;
 }
+
+function dropzones3_widget_container_process($element, &$form_state, $form) {
+  // $field = field_widget_field($element, $form_state);
+  $instance = field_widget_instance($element, $form_state);
+  dropzones3_add_template("dropzones3-item-client", theme('dropzones3-item-client'));
+
+  $element['#message'] = $instance['widget']['settings']['message'];
+  // Dropzone expects a dot before all accepted extensions to
+  // differentiate between accepted MIME types.
+  $dot = function($string) {
+    return '.' . $string;
+  };
+  if (isset($element['#upload_validators']['file_validate_extensions'][0])) {
+    $extension_list = implode(',', array_map($dot, array_filter(explode(' ', $instance['settings']['file_extensions']))));
+  }
+
+  $element['#attached']['js'][] = array(
+    'type' => 'setting',
+    'data' => array(
+      'dzs3' => array(
+        '#' . $element['#id'] => array(
+          // Drupal Specific used in notify function.
+          'drupal' => array(
+            // Get element name without the last element since we'll add it in JS.
+            'elementParents' => $element['#parents'],
+            'formId' => $form['#id'],
+            'triggeringValue' => $element['#upload_button_value'],
+          ),
+          's3' => array(
+            'accesskey' => variable_get('dropzones3_aws_access_key'),
+            'region' => variable_get('dropzones3_aws_region'),
+            'bucket' => variable_get('dropzones3_aws_bucket'),
+            'ssencrypt' => $instance['widget']['settings']['ssencrypt'],
+          ),
+          'signing' => array(
+            'endpoint' => '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'],
+          ),
+          'notifying' => array(
+            'endpoint' => '/js/dropzones3/notify'
+          ),
+          'autoQueue' => $instance['widget']['settings']['autostart'],
+          'previewTemplate' => '#dropzones3-item-client',
+          'validation' => array(
+            // 'maxFiles' => $element['#max_files'],
+            // Convert bytes to KB to MB.
+            'maxFilesize' => parse_size($instance['settings']['max_filesize']) / 1024 / 1024,
+            'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
+          ),
+          // 'resuming' => array('automaticRetry' => false),
+        ),
+      ),
+    ),
+  );
+  return $element;
+}
+
 /**
  * The #pre_render callback for element.
  */
 function dropzones3_element_pre_render($element) {
+  $element['upload_button']['#access'] = FALSE;
+  $element['remove_button']['#access'] = FALSE;
+  hide($element['upload_button']);
+  hide($element['remove_button']);
+
+  return $element;
+}
+
+/**
+ * The #pre_render callback for element.
+ */
+function dropzones3_widget_pre_render($element) {
   if (($library = libraries_load('cryptojs')) && empty($library['loaded'])) {
     drupal_set_message("Library 'CryptoJS' not found.", 'error');
   }
@@ -396,10 +417,8 @@ function dropzones3_element_pre_render($element) {
     drupal_set_message("Library 'Dropzone S3' not found.", 'error');
   }
 
-  $element['upload_button']['#access'] = FALSE;
-  $element['remove_button']['#access'] = FALSE;
-  hide($element['upload_button']);
-  hide($element['remove_button']);
+  $children = element_children($element);
+  hide($element[end($children)]);
 
   return $element;
 }
