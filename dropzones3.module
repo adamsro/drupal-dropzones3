@@ -167,17 +167,17 @@ function dropzones3_theme($existing, $type, $theme, $path) {
     'dropzones3_template' => array(
       'render element' => 'template',
     ),
-    'dropzones3-container' => array(
+    'dropzones3_container' => array(
       'render element' => 'element',
       'template' => 'dropzones3-container',
       'path' => $module_path . '/templates',
     ),
-    'dropzones3-item' => array(
+    'dropzones3_item' => array(
       'render element' => 'element',
       'template' => 'dropzones3-item',
       'path' => $module_path . '/templates',
     ),
-    'dropzones3-item-client' => array(
+    'dropzones3_item_client' => array(
       'render element' => 'element',
       'template' => 'dropzones3-item-client',
       'path' => $module_path . '/templates',
@@ -243,6 +243,15 @@ function dropzones3_page_build(&$page) {
 function dropzones3_add_template($template_id, $template_source) {
   $templates = & drupal_static('dropzones3_templates', array());
   $templates[$template_id] = $template_source;
+}
+
+/**
+ * Preprocess for file item. Make the file object easier to access.
+ *
+ * @param  array &$variables Variabls to be sent to the template.
+ */
+function dropzones3_preprocess_dropzones3_item(&$variables) {
+  $variables['file'] = $variables['element']['#file'];
 }
 
 /**

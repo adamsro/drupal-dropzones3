@@ -15,7 +15,7 @@ function dropzones3_element_info() {
     '#element_validate' => array('dropzones3_upload_validate'),
     '#process' => array('dropzones3_element_process'),
     '#pre_render' => array('dropzones3_element_pre_render'),
-    '#theme' => 'dropzones3-item',
+    '#theme' => 'dropzones3_item',
     // The S3 directory relative to the bucket root where files are uploaded.
     '#upload_location' => !empty($config['root_folder']) ? $config['root_folder'] : '',
     '#upload_validators' => array(),
@@ -136,7 +136,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     $elements[$delta]['#required'] = ($element['#required'] && $delta == 0);
   }
   $elements['#file_upload_delta'] = $delta;
-  $elements['#theme'] = 'dropzones3-container';
+  $elements['#theme'] = 'dropzones3_container';
   $elements['#pre_render'] = array('dropzones3_widget_pre_render');
   $elements['#upload_button_value'] = $element_info['#upload_button_value'];
   $elements['#process'] = array('dropzones3_widget_container_process');
@@ -305,6 +305,18 @@ function dropzones3_element_process($element, &$form_state, $form) {
     '#weight' => -5,
   );
 
+  // Needed when printing files from a previous submission.
+  $element['fid'] = array(
+    '#type' => 'hidden',
+    '#value' => $fid,
+    '#attributes' => array('data-drupal-fid' => array($fid)),
+  );
+  $element['filename'] = array(
+    '#type' => 'hidden',
+    '#attributes' => array('data-drupal-filename' => array()),
+    '#default_value' => isset($element['#file']->filename) ? $element['#file']->filename : '',
+  );
+
   $form_state['cache'] = TRUE;
 
   // If the #upload_location is set, we add a new key to the $form array that
@@ -342,7 +354,7 @@ function dropzones3_widget_process($element, &$form_state, $form) {
 function dropzones3_widget_container_process($element, &$form_state, $form) {
   // $field = field_widget_field($element, $form_state);
   $instance = field_widget_instance($element, $form_state);
-  dropzones3_add_template("dropzones3-item-client", theme('dropzones3-item-client'));
+  dropzones3_add_template("dropzones3-item-client", theme('dropzones3_item_client'));
 
   $element['#message'] = $instance['widget']['settings']['message'];
   // Dropzone expects a dot before all accepted extensions to
