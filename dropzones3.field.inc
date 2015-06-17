@@ -7,26 +7,24 @@
 /**
  * Implements hook_element_info().
  */
-function dropzones3_element_info() {
-  $config = _s3fs_get_config();
-  $types['dropzones3'] = array(
-    '#input' => TRUE,
-    '#value_callback' => 'dropzones3_upload_value',
-    '#element_validate' => array('dropzones3_upload_validate'),
-    '#process' => array('dropzones3_element_process'),
-    '#pre_render' => array('dropzones3_element_pre_render'),
-    '#theme' => 'dropzones3_item',
-    // The S3 directory relative to the bucket root where files are uploaded.
-    '#upload_location' => !empty($config['root_folder']) ? $config['root_folder'] : '',
-    '#upload_validators' => array(),
-    '#upload_button_value' => t('Upload'),
-    '#extended' => FALSE,
-    '#autostart' => TRUE,
-    '#ssencrypt' => FALSE,
-    '#description' => '',
-  );
-  return $types;
-}
+// function dropzones3_element_info() {
+//   $config = _s3fs_get_config();
+//   $types['dropzones3'] = array(
+//     '#input' => TRUE,
+//     // '#value_callback' => 'dropzones3_upload_value',
+//     '#element_validate' => array('dropzones3_upload_validate'),
+//     '#process' => array('dropzones3_element_process'),
+//     '#pre_render' => array('dropzones3_element_pre_render'),
+//     '#theme' => 'dropzones3_item',
+//     // The S3 directory relative to the bucket root where files are uploaded.
+//     '#upload_validators' => array(),
+//     '#extended' => FALSE,
+//     '#autostart' => TRUE,
+//     '#ssencrypt' => FALSE,
+//     '#description' => '',
+//   );
+//   return $types;
+// }
 
 
 
@@ -107,7 +105,8 @@ function dropzones3_field_widget_settings_form($field, $instance) {
  */
 function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
 
-  $elements = array();
+  $elements = $element;
+
   $defaults = array(
     'fid' => 0,
     'display' => !empty($field['settings']['display_default']),
@@ -122,51 +121,60 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   if (isset($field_state['items'])) {
     $items = $field_state['items'];
   }
-  $element_info = element_info('dropzones3');
+  // $element_info = element_info('dropzones3');
   $element += array(
-    '#type' => 'dropzones3',
+    '#input' => TRUE,
+    '#type' => 'managed_file',
     '#upload_location' => $instance['settings']['file_directory'],
     '#upload_validators' => array(
       'file_validate_name_length' => array(),
       'file_validate_size' => array(parse_size($instance['settings']['max_filesize'])),
       'file_validate_extensions' => array($instance['settings']['file_extensions']),
     ),
-    '#value_callback' => 'dropzones3_field_widget_value',
-    '#ssencrypt' => $instance['settings']['ssencrypt'],
-    '#process' => array_merge($element_info['#process'], array('dropzones3_widget_process')),
-    '#upload_button_value' => $element_info['#upload_button_value'],
+    '#process' => array('dropzones3_element_process'),
+    '#theme' => 'dropzones3_item',
+    // '#process' => array_merge($element_info['#process'], ),
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
   );
-
   foreach ($items as $item) {
     $elements[$delta] = $element;
     $elements[$delta]['#default_value'] = $item;
     $elements[$delta]['#weight'] = $delta;
     $delta++;
   }
-  // And then add one more empty row for new uploads except when this is a
-  // programmed form as it is not necessary.
-  // if (($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED || $delta < $field['cardinality']) && empty($form_state['programmed'])) {
-  //   $elements[$delta] = $element;
-  //   $elements[$delta]['#default_value'] = $defaults;
-  //   $elements[$delta]['#weight'] = $delta;
-  //   $elements[$delta]['#required'] = ($element['#required'] && $delta == 0);
-  // }
   $elements['#file_upload_delta'] = $delta;
+  // Set up the buttons first since we need to check if they were clicked.
+  $elements['upload_button'] = array(
+    '#name' => implode('_', $element['#field_parents']) . '_upload_button',
+    '#type' => 'submit',
+    '#value' => t('Upload'),
+    '#validate' => array(),
+    '#submit' => array('dropzones3_widget_submit', 'file_field_widget_submit'),
+    '#limit_validation_errors' => array($element['#field_parents']),
+    '#weight' => -5,
+  );
+  $elements['remove_button'] = array(
+    '#name' => "{$parents_id}_remove_button",
+    '#type' => 'submit',
+    '#value' => t('Remove'),
+    '#validate' => array(),
+    '#submit' => array('dropzones3_widget_submit', 'file_field_widget_submit'),
+    '#limit_validation_errors' => array($element['#field_parents']),
+    '#weight' => -5,
+  );
+  $elements['#input'] = TRUE;
+
+  $elements['#value_callback'] = 'dropzones3_field_widget_value';
   $elements['#theme'] = 'dropzones3_container';
   $elements['#pre_render'] = array('dropzones3_widget_pre_render');
-  $elements['#upload_button_value'] = $element_info['#upload_button_value'];
-  $elements['#process'] = array('dropzones3_widget_container_process');
+  $elements['#ssencrypt'] = $instance['settings']['ssencrypt'];
+  $elements['#process'] = array( 'dropzones3_widget_process');
+  $elements['#message'] = $instance['widget']['settings']['message'];
   $elements['#description'] = theme('file_upload_help', array('description' => $element['#description'], 'upload_validators' => $element['#upload_validators']));
-  $elements['#title'] = $element['#title'];
-  $elements['#field_name'] = $element['#field_name'];
-  $elements['#language'] = $element['#language'];
-  $elements['#display_field'] = $field['settings']['display_field'];
-  $file_path = drupal_get_path('module', 'dropzones3');
   $elements['#attached'] = array(
     'js' => array(
-      $file_path . '/dropzones3-init.js',
+      drupal_get_path('module', 'dropzones3') . '/dropzones3-init.js',
     ),
   );
 
@@ -305,25 +313,6 @@ function dropzones3_element_process($element, &$form_state, $form) {
 
   $instance = field_widget_instance($element, $form_state);
 
-  // Set up the buttons first since we need to check if they were clicked.
-  $element['upload_button'] = array(
-    '#name' => implode('_', $element['#parents']) . '_upload_button',
-    '#type' => 'submit',
-    '#value' => $element['#upload_button_value'],
-    '#validate' => array(),
-    '#submit' => array('dropzones3_element_submit'),
-    '#limit_validation_errors' => array($element['#parents']),
-    '#weight' => -5,
-  );
-  $element['remove_button'] = array(
-    '#name' => "{$parents_id}_remove_button",
-    '#type' => 'submit',
-    '#value' => t('Remove'),
-    '#validate' => array(),
-    '#submit' => array('dropzones3_element_submit'),
-    '#limit_validation_errors' => array($element['#parents']),
-    '#weight' => -5,
-  );
 
   // Needed when printing files from a previous submission.
   $element['fid'] = array(
@@ -365,25 +354,7 @@ function dropzones3_element_process($element, &$form_state, $form) {
   return $element;
 }
 
-
-/**
- * An element #process callback for the file_generic field type.
- *
- * Expands the file_generic type to include the description and display fields.
- */
 function dropzones3_widget_process($element, &$form_state, $form) {
-  // Add another submit handler to the upload and remove buttons, to implement
-  // functionality needed by the field widget. This submit handler, along with
-  // the rebuild logic in file_field_widget_form() requires the entire field,
-  // not just the individual item, to be valid.
-  foreach (array('upload_button', 'remove_button') as $key) {
-    $element[$key]['#submit'][] = 'file_field_widget_submit';
-    $element[$key]['#limit_validation_errors'] = array(array_slice($element['#parents'], 0, -1));
-  }
-  return $element;
-}
-
-function dropzones3_widget_container_process($element, &$form_state, $form) {
   // $field = field_widget_field($element, $form_state);
   $instance = field_widget_instance($element, $form_state);
   dropzones3_add_template("dropzones3-item-client", theme('dropzones3_item_client'));
@@ -408,7 +379,8 @@ function dropzones3_widget_container_process($element, &$form_state, $form) {
             // Get element name without the last element since we'll add it in JS.
             'elementParents' => $element['#parents'],
             'formId' => $form['#id'],
-            'triggeringValue' => $element['#upload_button_value'],
+            'triggeringValue' => t('Upload'),
+            'startingDelta' => $element['#file_upload_delta'],
           ),
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
@@ -441,7 +413,13 @@ function dropzones3_widget_container_process($element, &$form_state, $form) {
 /**
  * The #pre_render callback for element.
  */
-function dropzones3_element_pre_render($element) {
+function dropzones3_widget_pre_render($element) {
+  if (($library = libraries_load('cryptojs')) && empty($library['loaded'])) {
+    drupal_set_message("Library 'CryptoJS' not found.", 'error');
+  }
+  if (($library = libraries_load('dropzones3')) && empty($library['loaded'])) {
+    drupal_set_message("Library 'Dropzone S3' not found.", 'error');
+  }
   $element['upload_button']['#access'] = FALSE;
   $element['remove_button']['#access'] = FALSE;
   hide($element['upload_button']);
@@ -451,26 +429,9 @@ function dropzones3_element_pre_render($element) {
 }
 
 /**
- * The #pre_render callback for element.
- */
-function dropzones3_widget_pre_render($element) {
-  if (($library = libraries_load('cryptojs')) && empty($library['loaded'])) {
-    drupal_set_message("Library 'CryptoJS' not found.", 'error');
-  }
-  if (($library = libraries_load('dropzones3')) && empty($library['loaded'])) {
-    drupal_set_message("Library 'Dropzone S3' not found.", 'error');
-  }
-
-  $children = element_children($element);
-  hide($element[end($children)]);
-
-  return $element;
-}
-
-/**
  * Submit callback for the upload button on dropzones3 elements.
  */
-function dropzones3_element_submit($form, &$form_state) {
+function dropzones3_widget_submit($form, &$form_state) {
   // Set the form to rebuild so that $form is correctly updated in response to
   // processing the file removal.
   $form_state['rebuild'] = TRUE;

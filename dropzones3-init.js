@@ -14,17 +14,17 @@
               _ref0 = this.options.drupal.elementParents.slice(),
               _ref1 = this.options.drupal.elementParents.slice(),
               field = _ref0.shift() + "[" + _ref0.join("][") + "][" + file.delta + "]",
+              // field = _ref0.shift() + "[" + _ref0.join("][") + "]",
               endpoint = _this.options.notifying.endpoint + "/" + _ref1.join("/") + "/" + file.delta;
 
             formData = new FormData(document.getElementById(this.options.drupal.formId));
             formData.append(field + "[filename]", file.name);
             formData.append(field + "[filesize]", file.size);
-            formData.append(field + "[filemime]", file.type);
             formData.append(field + "[key]", file.upload.auth.key);
-            formData.append(field + "[fid]", 0);
-            formData.append(field + "[_weight]", file.delta);
+            // formData.append(field + "[delta]", file.delta);
+            // formData.append(field + "[fid]", 0);
 
-            formData.append('_triggering_element_name', _ref1.join("_") + "_" + file.delta + "_upload_button");
+            formData.append('_triggering_element_name', _ref1.join("_") + "_upload_button");
             formData.append('_triggering_element_value', this.options.drupal.triggeringValue);
 
             xhr.onload = function() {
