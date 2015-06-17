@@ -38,6 +38,12 @@ function dropzones3_field_widget_info() {
     'dropzones3' => array(
       'label' => t('Dropzone S3'),
       'field types' => array('file', 'image'),
+      'settings' => array(
+        'autostart' => TRUE,
+        'ssencrypt' => TRUE,
+        'message' => t('Drop files here or click to upload.'),
+        'preview_image_style' => 'medium',
+      ),
       'behaviors' => array(
         'multiple values' => FIELD_BEHAVIOR_CUSTOM,
         'default value' => FIELD_BEHAVIOR_NONE,
@@ -64,23 +70,34 @@ function dropzones3_form_field_ui_field_edit_form_alter(&$form, &$form_state, $f
  * Implements hook_field_widget_settings_form().
  */
 function dropzones3_field_widget_settings_form($field, $instance) {
+  $settings = $instance['widget']['settings'];
+
   $form = array();
   $form['autostart'] = array(
     '#type' => 'checkbox',
     '#title' => t('Start uploading as soon as files are added?'),
-    '#default_value' => $settings['autostart'] ? $settings['autostart'] : TRUE,
+    '#default_value' => $settings['autostart'],
     '#description' => t('When checked, upload will start as soon as files are added without requiring to click <em>Upload</em>, unless some of the added files did not pass validation.'),
   );
   $form['ssencrypt'] = array(
     '#type' => 'checkbox',
     '#title' => t('Server Side Encryption'),
-    '#default_value' => $settings['ssencrypt'] ? $settings['ssencrypt'] : FALSE,
+    '#default_value' => $settings['ssencrypt'],
     '#description' => t("Send header 'x-amz-server-side-encryption':'AES256' with requests."),
   );
   $form['message'] = array(
     '#type' => 'textarea',
     '#title' => t('Text in drop area'),
-    '#default_value' => $settings['message'] ? $settings['message'] : t('Drop files here or click to upload.'),
+    '#default_value' => $settings['message'],
+  );
+  $form['preview_image_style'] = array(
+    '#title' => t('Preview image style'),
+    '#type' => 'select',
+    '#options' => image_style_options(FALSE, PASS_THROUGH),
+    '#empty_option' => '<' . t('no preview') . '>',
+    '#default_value' => $settings['preview_image_style'],
+    '#description' => t('The preview image will be shown while editing the content.'),
+    '#weight' => 15,
   );
   return $form;
 }
@@ -97,6 +114,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     'description' => '',
   );
 
+  $form_state['cache'] = TRUE;
   // Load the items for form rebuilds from the field state as they might not be
   // in $form_state['values'] because of validation limitations. Also, they are
   // only passed in as $items when editing existing entities.
@@ -129,12 +147,12 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   }
   // And then add one more empty row for new uploads except when this is a
   // programmed form as it is not necessary.
-  if (($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED || $delta < $field['cardinality']) && empty($form_state['programmed'])) {
-    $elements[$delta] = $element;
-    $elements[$delta]['#default_value'] = $defaults;
-    $elements[$delta]['#weight'] = $delta;
-    $elements[$delta]['#required'] = ($element['#required'] && $delta == 0);
-  }
+  // if (($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED || $delta < $field['cardinality']) && empty($form_state['programmed'])) {
+  //   $elements[$delta] = $element;
+  //   $elements[$delta]['#default_value'] = $defaults;
+  //   $elements[$delta]['#weight'] = $delta;
+  //   $elements[$delta]['#required'] = ($element['#required'] && $delta == 0);
+  // }
   $elements['#file_upload_delta'] = $delta;
   $elements['#theme'] = 'dropzones3_container';
   $elements['#pre_render'] = array('dropzones3_widget_pre_render');
@@ -285,11 +303,13 @@ function dropzones3_element_process($element, &$form_state, $form) {
   $element['#file'] = $fid ? file_load($fid) : FALSE;
   $element['#tree'] = TRUE;
 
+  $instance = field_widget_instance($element, $form_state);
+
   // Set up the buttons first since we need to check if they were clicked.
   $element['upload_button'] = array(
     '#name' => implode('_', $element['#parents']) . '_upload_button',
     '#type' => 'submit',
-    '#value' => $element['upload_button_value'],
+    '#value' => $element['#upload_button_value'],
     '#validate' => array(),
     '#submit' => array('dropzones3_element_submit'),
     '#limit_validation_errors' => array($element['#parents']),
@@ -313,9 +333,21 @@ function dropzones3_element_process($element, &$form_state, $form) {
   );
   $element['filename'] = array(
     '#type' => 'hidden',
+    '#value' => isset($element['#file']->filename) ? $element['#file']->filename : '',
     '#attributes' => array('data-drupal-filename' => array()),
-    '#default_value' => isset($element['#file']->filename) ? $element['#file']->filename : '',
   );
+  // Add the image preview.
+  if ($element['#file'] && $instance['widget']['settings']['preview_image_style']) {
+    $variables = array(
+      'style_name' => $instance['widget']['settings']['preview_image_style'],
+      'path' => $element['#file']->uri,
+      );
+    $element['preview'] = array(
+      '#type' => 'markup',
+      // '#attributes' => array('data-dzs3-thumbnail' => array()),
+      '#markup' => theme('image_style', $variables),
+      );
+  }
 
   $form_state['cache'] = TRUE;
 
@@ -398,7 +430,7 @@ function dropzones3_widget_container_process($element, &$form_state, $form) {
             'maxFilesize' => parse_size($instance['settings']['max_filesize']) / 1024 / 1024,
             'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
           ),
-          // 'resuming' => array('automaticRetry' => false),
+          'resuming' => array('automaticRetry' => false),
         ),
       ),
     ),

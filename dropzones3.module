@@ -142,10 +142,31 @@ function dropzones3_notify() {
   list($form, $form_state) = ajax_get_form();
 
   // Get the current element and count the number of files.
-  $current_element = $form;
-  foreach ($form_parents as $parent) {
-    $current_element = $current_element[$parent];
+  $current_element = &$form;
+  for ($i =0; $i < count($form_parents) -1; $i++) {
+    $current_element = &$current_element[$form_parents[$i]];
   }
+  $current_element[end($form_parents)] = element_info('dropzones3');
+  $current_element[end($form_parents)] += array(
+    '#type' => 'dropzones3',
+    '#upload_location' => $instance['settings']['file_directory'],
+    '#upload_validators' => array(
+      'file_validate_name_length' => array(),
+      'file_validate_size' => array(parse_size($instance['settings']['max_filesize'])),
+      'file_validate_extensions' => array($instance['settings']['file_extensions']),
+    ),
+    '#value_callback' => 'dropzones3_field_widget_value',
+    '#ssencrypt' => $instance['settings']['ssencrypt'],
+    '#process' => array_merge($element_info['#process'], array('dropzones3_widget_process')),
+    '#upload_button_value' => $element_info['#upload_button_value'],
+    // Allows this field to return an array instead of a single value.
+    '#extended' => TRUE,
+    '#default_value' => array(
+      'fid' => 0,
+      'display' => 1,
+      'description' => '',
+      ),
+    );
   $current_file_count = isset($current_element['#file_upload_delta']) ? $current_element['#file_upload_delta'] : 0;
 
   // Process user input. $form and $form_state are modified in the process.

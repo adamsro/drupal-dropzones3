@@ -1,5 +1,7 @@
 <div class="dzs3-preview dzs3-file-preview">
-  <div class="dzs3-image dzs3-ext dzs3-ext-<?php print pathinfo($file->filename, PATHINFO_EXTENSION);?>" data-dzs3-thumb-container><img data-dzs3-thumbnail /></div>
+  <div class="dzs3-image dzs3-ext dzs3-ext-<?php print pathinfo($file->filename, PATHINFO_EXTENSION);?>" data-dzs3-thumb-container>
+    <?php print drupal_render($element['preview']); ?>
+  </div>
   <div class="dzs3-details">
     <div class="dzs3-size"><span data-dzs3-size><?php print $file->filesize; ?></span></div>
     <div class="dzs3-filename"><span data-dzs3-name><?php print $file->filename; ?></span></div>
