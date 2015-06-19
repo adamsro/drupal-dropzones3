@@ -68,41 +68,46 @@ function dropzones3_sign() {
   // Ensure form_build_id is valid.
   list($form, $form_state) = ajax_get_form();
 
+  // Ensure required inputs are present.
+  $file = new stdClass();
+  $file->filename = $_POST['filename'];
+  $file->filesize = (int) $_POST['filesize'];
+  if (empty($file->filesize) || !empty(file_validate($file, $current_element['#upload_validators']))) {
+    drupal_add_http_header('Status', '400 Bad Request');
+    drupal_exit();
+  }
+
   // Get the current element and count the number of files.
   $current_element = $form;
   foreach ($form_parents as $parent) {
     $current_element = $current_element[$parent];
   }
-
-  // Require filename and filesize be present validated as well.
-  // This could be bypassed but makes things a little more difficult.
-  $file = new stdClass();
-  if (!($file->filename = $_POST['name']) || !($file->filesize = $_POST['size']) || !empty(file_validate($file, $current_element['#upload_validators']))) {
-    drupal_add_http_header('Status', '400 Bad Request');
-    drupal_exit();
-  }
   $config = _s3fs_get_config();
-  $directory = '';
+  $path = '';
   if (!empty($config['root_folder'])) {
-    $directory =  trim($config['root_folder'], '\/');
+    $path =  trim($config['root_folder'], '\/');
   }
   // Check for an upload location and make use of it.
   if (isset($form["#upload_location"])) {
-    $directory .= '/' . trim($form["#upload_location"], '\/');
+    $path .= '/' . trim($form["#upload_location"], '\/');
   }
-  // Strip control characters (ASCII value < 32). Though these are allowed in
-  // some filesystems, not many applications handle them well.
-  $file->filename = preg_replace('/[\x00-\x1F]/u', '_', $file->filename);
-  // Use hash instead of file_create_filename because a key may be used in s3
-  // but not yet registered with Drupal, e.g. an abandoned multipart upload.
-  $file->filename .= '-' . md5(microtime());
-  $date = new DateTime('NOW', new DateTimeZone('UTC'));
+  if (!empty($path)) {
+    $path .= '/';
+  }
 
+  $date = new DateTime('NOW', new DateTimeZone('UTC'));
+  $id = md5(microtime());
   $data = array(
     "date" => $date->format('c'),
     "signature" => _dropzones3_get_signature($date),
-    "key" => $directory . '/' . $file->filename,
+    "key" => $path . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']) . '-' . $id,
+    "serverid" => $id,
   );
+  // Save upload data to be used when saving file in value callback.
+  $record = $data + array('timestamp' => REQUEST_TIME, 'uri' => $data['key']);
+  // exit(var_dump($record));
+  drupal_write_record('dropzones3', $record, 'serverid');
+
   // Prepare to send JSON text to the browser.
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
   print drupal_json_encode($data);
@@ -139,7 +144,7 @@ function dropzones3_notify() {
 
   // Ensure form_build_id is valid.
   list($form, $form_state) = ajax_get_form();
-// exit(var_dump($form_state['input']));
+
   // Process user input. $form and $form_state are modified in the process.
   drupal_process_form($form['#form_id'], $form, $form_state);
 
