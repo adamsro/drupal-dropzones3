@@ -82,8 +82,8 @@ function dropzones3_sign() {
     $path =  trim($config['root_folder'], '\/');
   }
   // Check for an upload location and make use of it.
-  if (isset($form["#upload_location"])) {
-    $path .= '/' . trim($form["#upload_location"], '\/');
+  if (isset($current_element["#upload_location"])) {
+    $path .= '/' . trim($current_element["#upload_location"], '\/');
   }
   if (!empty($path)) {
     $path .= '/';
