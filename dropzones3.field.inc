@@ -210,18 +210,6 @@ function dropzones3_element_process($element, &$form_state, $form) {
       );
   }
 
-
-  // If the #upload_location is set, we add a new key to the $form array that
-  // stores this information in a way that is easier for us to look up in the
-  // s3fs_cors_sign_request() function, where we don't know the element's
-  // complete parentage. The data is stored as part of the $form array so we
-  // can retrieve it server side but ensure that it's never exposed client side,
-  // since doing so would allow users to upload files to an arbitrary directory
-  // in the S3 bucket via local HTML modification.
-  if (isset($element['#upload_location'])) {
-    $form["#{$element['upload_button']['#name']}_location"] = $element['#upload_location'];
-  }
-
   return $element;
 }
 
