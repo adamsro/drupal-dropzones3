@@ -40,12 +40,6 @@ function dropzones3_menu() {
     'access arguments' => array('access content'),
     'type' => MENU_CALLBACK,
   );
-  // Endpoint for JS Library to notify Drupal of successful upload.
-  $items['js/dropzones3/notify'] = array(
-    'page callback' => 'dropzones3_notify',
-    'access arguments' => array('access content'),
-    'type' => MENU_CALLBACK,
-  );
   $items['admin/config/media/dropzones3'] = array(
     'title' => t('DropzoneS3 settings'),
     'description' => t('Set default AWS credentials, region, and bucket for DropzoneS3 elements.'),
@@ -96,17 +90,11 @@ function dropzones3_sign() {
   }
 
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
-  $id = md5(microtime());
   $data = array(
     "date" => $date->format('c'),
     "signature" => _dropzones3_get_signature($date),
-    "key" => $path . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']) . '-' . $id,
-    "serverid" => $id,
+    "key" => $path . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']) . '-' . md5(microtime()),
   );
-  // Save upload data to be used when saving file in value callback.
-  $record = $data + array('timestamp' => REQUEST_TIME, 'uri' => $data['key']);
-  // exit(var_dump($record));
-  drupal_write_record('dropzones3', $record, 'serverid');
 
   // Prepare to send JSON text to the browser.
   drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
@@ -134,25 +122,6 @@ function _dropzones3_get_signature($date) {
     'sha256', "aws4_request", $k_service
     );
   return $k_signing;
-}
-
-/**
- * Ajax endpoint saves a file once its been uploaded.
- */
-function dropzones3_notify() {
-  $form_parents = func_get_args();
-
-  // Ensure form_build_id is valid.
-  list($form, $form_state) = ajax_get_form();
-
-  // Process user input. $form and $form_state are modified in the process.
-  drupal_process_form($form['#form_id'], $form, $form_state);
-
-  $input = drupal_array_get_nested_value($form_state['values'], $form_parents);
-
-  drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
-  print drupal_json_encode(array('fid' => $input['fid']));
-  drupal_exit();
 }
 
 /**

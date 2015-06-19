@@ -5,30 +5,6 @@
  */
 
 /**
- * Implements hook_element_info().
- */
-// function dropzones3_element_info() {
-//   $config = _s3fs_get_config();
-//   $types['dropzones3'] = array(
-//     '#input' => TRUE,
-//     // '#value_callback' => 'dropzones3_upload_value',
-//     '#element_validate' => array('dropzones3_upload_validate'),
-//     '#process' => array('dropzones3_element_process'),
-//     '#pre_render' => array('dropzones3_element_pre_render'),
-//     '#theme' => 'dropzones3_item',
-//     // The S3 directory relative to the bucket root where files are uploaded.
-//     '#upload_validators' => array(),
-//     '#extended' => FALSE,
-//     '#autostart' => TRUE,
-//     '#ssencrypt' => FALSE,
-//     '#description' => '',
-//   );
-//   return $types;
-// }
-
-
-
-/**
  * Implements hook_field_widget_info().
  */
 function dropzones3_field_widget_info() {
@@ -107,12 +83,6 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
 
   $elements = $element;
 
-  $defaults = array(
-    'fid' => 0,
-    'display' => !empty($field['settings']['display_default']),
-    'description' => '',
-  );
-
   $form_state['cache'] = TRUE;
   // Load the items for form rebuilds from the field state as they might not be
   // in $form_state['values'] because of validation limitations. Also, they are
@@ -144,27 +114,8 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     $delta++;
   }
   $elements['#file_upload_delta'] = $delta;
-  // Set up the buttons first since we need to check if they were clicked.
-  $elements['upload_button'] = array(
-    '#name' => implode('_', $element['#field_parents']) . '_upload_button',
-    '#type' => 'submit',
-    '#value' => t('Upload'),
-    '#validate' => array(),
-    '#submit' => array('dropzones3_widget_submit', 'file_field_widget_submit'),
-    '#limit_validation_errors' => array($element['#field_parents']),
-    '#weight' => -5,
-  );
-  $elements['remove_button'] = array(
-    '#name' => "{$parents_id}_remove_button",
-    '#type' => 'submit',
-    '#value' => t('Remove'),
-    '#validate' => array(),
-    '#submit' => array('dropzones3_widget_submit', 'file_field_widget_submit'),
-    '#limit_validation_errors' => array($element['#field_parents']),
-    '#weight' => -5,
-  );
   $elements['#input'] = TRUE;
-
+  $elements['#tree'] = TRUE;
   $elements['#value_callback'] = 'dropzones3_field_widget_value';
   $elements['#theme'] = 'dropzones3_container';
   $elements['#pre_render'] = array('dropzones3_widget_pre_render');
@@ -195,110 +146,55 @@ function dropzones3_upload_validate(&$element, &$form_state) {
  * Callback #value_callback.
  */
 function dropzones3_field_widget_value($element, $input = FALSE, $form_state = array()) {
-  if ($input) {
-    // Checkboxes lose their value when empty.
-    // If the display field is present make sure its unchecked value is saved.
-    $field = field_widget_field($element, $form_state);
-    if (empty($input['display'])) {
-      $input['display'] = $field['settings']['display_field'] ? 0 : 1;
-    }
-  }
-
-  // Handle uploads and the like.
-  $return = dropzones3_upload_value($element, $input, $form_state);
-
-  // Ensure that all the required properties are returned, even if empty.
-  $return += array(
-    'fid' => 0,
-    'display' => 1,
-    'description' => '',
-  );
-
-  return $return;
-}
-
-/**
- * Callback #value_callback.
- */
-function dropzones3_upload_value($element, $input = FALSE, $form_state = array()) {
   global $user;
   $return = array();
-  $parents_id = implode('_', $element['#parents']);
+  $field = field_widget_field($element, $form_state);
 
-  if (!empty($input['fid'])) {
-    // The input will have a non-zero fid only when saving the full node form.
-    // We don't want to do anything when that happens, because everything has
-    // already been done in the AJAX workflow.
-    return $input;
+  if (empty($input)) {
+    return array();
   }
 
-  $remove_button_clicked = (isset($form_state['input']['_triggering_element_name'])
-    && $form_state['input']['_triggering_element_name'] == "{$parents_id}_remove_button");
-
-  // TODO: I'm relatively sure this is useless, because of how we deal with the files.
-  // But just in case, I'm going to leave it around for now.
-  // Find the current value of this field from the form state, if it's there.
-  $form_state_fid = $form_state['values'];
-  foreach ($element['#parents'] as $parent) {
-    $form_state_fid = isset($form_state_fid[$parent]) ? $form_state_fid[$parent] : 0;
-  }
-  if ($element['#extended'] && isset($form_state_fid['fid'])) {
-    $fid = $form_state_fid['fid'];
-  }
-  elseif (is_numeric($form_state_fid)) {
-    $fid = $form_state_fid;
-  }
-
-  // If there's valid input, save the new upload.
-  if (!empty($input) && !empty($input['key']) && $fid == 0 && !$remove_button_clicked) {
-    $return = $input;
-
-    // Construct a Drupal file object.
-    $file = new stdClass();
-    $file->uid = $user->uid;
-    $file->filename = $input['filename'];
-    $file->filesize = $input['filesize'];
-    $file->filemime = $input['filemime'];
-    $file->uri = "s3://" . $input['key'];
-    $file->status = 0;
-    $file->timestamp = REQUEST_TIME;
-    // Save the uploaded file to the file_managed table.
-    module_invoke_all('file_presave', $file);
-    module_invoke_all('entity_presave', $file, 'file');
-
-    drupal_write_record('file_managed', $file);
-    // Inform modules about the newly added file.
-    module_invoke_all('file_insert', $file);
-    module_invoke_all('entity_insert', $file, 'file');
-
-    // Clear the static loading cache.
-    entity_get_controller('file')->resetCache(array($file->fid));
-
-    $return['fid'] = $file->fid;
-
-    $wrapper = new S3fsStreamWrapper();
-    $wrapper->writeUriToCache($input['key']);
-  }
-
-  if (empty($input) || $remove_button_clicked) {
-    // If there is no input, or the remove button was just clicked, set the
-    // default value.
-    if ($element['#extended']) {
-      $default_fid = isset($element['#default_value']['fid']) ? $element['#default_value']['fid'] : 0;
-      $return = isset($element['#default_value']) ? $element['#default_value'] : array('fid' => 0);
+  while ($value = next($input)) {
+  // Ensure that all the required properties are returned, even if empty.
+    $value += array(
+      'fid' => 0,
+      'display' => 1,
+      'description' => '',
+      );
+    // Checkboxes lose their value when empty.
+    // If the display field is present make sure its unchecked value is saved.
+    if (empty($value['display'])) {
+      $value['display'] = $field['settings']['display_field'] ? 0 : 1;
     }
-    else {
-      $default_fid = isset($element['#default_value']) ? $element['#default_value'] : 0;
-      $return = array('fid' => 0);
-    }
+    // If there's valid input, save the new upload.
+    if (empty($value['fid']) && !empty($value['key'])) {
+      // Construct a Drupal file object.
+      $file = new stdClass();
+      $file->uid = $user->uid;
+      $file->filename = $value['filename'];
+      $file->filesize = 1024; // $value['filesize'];
+      $file->filemime = 'jpg/image'; //$value['filemime'];
+      $file->uri = "s3://" . $value['key'];
+      $file->status = 0;
+      $file->timestamp = REQUEST_TIME;
+      // Save the uploaded file to the file_managed table.
+      module_invoke_all('file_presave', $file);
+      module_invoke_all('entity_presave', $file, 'file');
 
-    // Confirm that the file exists when used as a default value.
-    if ($default_fid && $file = file_load($default_fid)) {
-      $return['fid'] = $file->fid;
+      drupal_write_record('file_managed', $file);
+      // Inform modules about the newly added file.
+      module_invoke_all('file_insert', $file);
+      module_invoke_all('entity_insert', $file, 'file');
+
+      // Clear the static loading cache.
+      entity_get_controller('file')->resetCache(array($file->fid));
+
+      $value['fid'] = $file->fid;
+
+      $wrapper = new S3fsStreamWrapper();
+      $wrapper->writeUriToCache($value['key']);
     }
-    else {
-      $return['fid'] = $fid;
-    }
+    $return[] = $value;
   }
   return $return;
 }
@@ -390,9 +286,6 @@ function dropzones3_widget_process($element, &$form_state, $form) {
           ),
           'signing' => array(
             'endpoint' => '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'],
-          ),
-          'notifying' => array(
-            'endpoint' => '/js/dropzones3/notify'
           ),
           'autoQueue' => $instance['widget']['settings']['autostart'],
           'previewTemplate' => '#dropzones3-item-client',
