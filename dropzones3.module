@@ -93,7 +93,7 @@ function dropzones3_sign() {
   $data = array(
     "date" => $date->format('c'),
     "signature" => _dropzones3_get_signature($date),
-    "key" => $path . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']) . '-' . md5(microtime()),
+    "key" => $path . md5(microtime()) . '-' . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']),
   );
 
   // Prepare to send JSON text to the browser.

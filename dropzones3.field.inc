@@ -127,6 +127,7 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
   global $user;
   $return = array();
   $field = field_widget_field($element, $form_state);
+  $instance = field_widget_instance($element, $form_state);
 
   if (empty($input)) {
     return array();
@@ -136,9 +137,8 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     // Ensure that all the required properties are returned, even if empty.
     $value += array(
       'fid' => 0,
-      'display' => 1,
       'description' => '',
-      );
+    );
     // Checkboxes lose their value when empty.
     // If the display field is present make sure its unchecked value is saved.
     if (empty($value['display'])) {
@@ -146,12 +146,25 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     }
     // If there's valid input, save the new upload.
     if (empty($value['fid']) && !empty($value['key'])) {
+      $wrapper = new S3fsStreamWrapper();
+      try {
+        $wrapper->writeUriToCache($value['key']);
+      } catch (Exception $e) {
+        // File not found in s3. Mostly likely the form submitted before upload was completed.
+        continue;
+      }
+      $record = db_select('s3fs_file', 's')
+        ->fields('s')
+        ->condition('uri', $value['key'], '=')
+        ->execute()
+        ->fetchAssoc();
+
       // Construct a Drupal file object.
       $file = new stdClass();
       $file->uid = $user->uid;
       $file->filename = $value['filename'];
-      $file->filesize = 1024; // $value['filesize'];
-      $file->filemime = 'jpg/image'; //$value['filemime'];
+      $file->filesize = $record['filesize'];
+      $file->filemime = file_get_mimetype($file->filename);
       $file->uri = "s3://" . $value['key'];
       $file->status = 0;
       $file->timestamp = REQUEST_TIME;
@@ -169,8 +182,6 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
 
       $value['fid'] = $file->fid;
 
-      $wrapper = new S3fsStreamWrapper();
-      $wrapper->writeUriToCache($value['key']);
     }
     $return[] = $value;
   }
@@ -202,12 +213,12 @@ function dropzones3_element_process($element, &$form_state, $form) {
     $variables = array(
       'style_name' => $instance['widget']['settings']['preview_image_style'],
       'path' => $element['#file']->uri,
-      );
+    );
     $element['preview'] = array(
       '#type' => 'markup',
       // '#attributes' => array('data-dzs3-thumbnail' => array()),
       '#markup' => theme('image_style', $variables),
-      );
+    );
   }
 
   return $element;
