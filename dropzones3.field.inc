@@ -95,7 +95,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   }
   $elements += array(
     '#file_upload_delta' => $delta,
-    '#upload_location' => $instance['settings']['file_directory'],
+    '#upload_location' => file_field_widget_uri($field, $instance),
     '#upload_validators' => array(
       'file_validate_name_length' => array(),
       'file_validate_size' => array(parse_size($instance['settings']['max_filesize'])),
@@ -146,16 +146,22 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     }
     // If there's valid input, save the new upload.
     if (empty($value['fid']) && !empty($value['key'])) {
+      // Remove root folder since s3fs adds it later.
+      $config = _s3fs_get_config();
+      if ($config['root_folder']) {
+        $key = implode('/', array_slice(explode('/', $value['key']), 1));
+      }
+
       $wrapper = new S3fsStreamWrapper();
       try {
-        $wrapper->writeUriToCache($value['key']);
+        $wrapper->writeUriToCache($key);
       } catch (Exception $e) {
         // File not found in s3. Mostly likely the form submitted before upload was completed.
         continue;
       }
       $record = db_select('s3fs_file', 's')
         ->fields('s')
-        ->condition('uri', $value['key'], '=')
+        ->condition('uri', $key, '=')
         ->execute()
         ->fetchAssoc();
 
@@ -165,7 +171,7 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
       $file->filename = $value['filename'];
       $file->filesize = $record['filesize'];
       $file->filemime = file_get_mimetype($file->filename);
-      $file->uri = "s3://" . $value['key'];
+      $file->uri = $field['settings']['uri_scheme'] . "://" . $key;
       $file->status = 0;
       $file->timestamp = REQUEST_TIME;
       // Save the uploaded file to the file_managed table.
