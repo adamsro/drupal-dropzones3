@@ -77,18 +77,8 @@ function dropzones3_sign() {
     drupal_exit();
   }
 
-  // $config = _s3fs_get_config();
-  // $path = '';
-  // if (!empty($config['root_folder'])) {
-  //   $path = $config['root_folder'];
-  // }
-  // if ($dir = ) {
-  //   $path .= '/' . $dir;
-  // }
-  // if (!empty($path)) {
-  //   $path .= '/';
-  // }
-
+  // Cannot use file_create_filename in this case because an s3 key may exist
+  // but not yet be written in Drupals cache, files uploading or abandoned.
   $s3name = md5(microtime()) . '-' . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']);
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
 

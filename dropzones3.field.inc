@@ -148,11 +148,12 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     if (empty($value['fid']) && !empty($value['key'])) {
 
       // Remove root folder since s3fs adds it in getExternalUrl()
-      // instead of saving it in the uri column.
+      // instead of saving it in the uri column for some reason...
       if (($config = _s3fs_get_config()) && $config['root_folder']) {
         $key = implode('/', array_slice(explode('/', $value['key']), 1));
       }
       $key = $field['settings']['uri_scheme'] . "://" . $key;
+
       $wrapper = new S3fsStreamWrapper();
       try {
         $wrapper->writeUriToCache($key);
