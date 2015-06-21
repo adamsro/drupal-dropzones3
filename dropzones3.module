@@ -77,23 +77,25 @@ function dropzones3_sign() {
     drupal_exit();
   }
 
-  $config = _s3fs_get_config();
-  $path = '';
-  if (!empty($config['root_folder'])) {
-    $path = $config['root_folder'];
-  }
-  if ($dir = file_uri_target($current_element["#upload_location"])) {
-    $path .= '/' . $dir;
-  }
-  if (!empty($path)) {
-    $path .= '/';
-  }
+  // $config = _s3fs_get_config();
+  // $path = '';
+  // if (!empty($config['root_folder'])) {
+  //   $path = $config['root_folder'];
+  // }
+  // if ($dir = ) {
+  //   $path .= '/' . $dir;
+  // }
+  // if (!empty($path)) {
+  //   $path .= '/';
+  // }
 
+  $s3name = md5(microtime()) . '-' . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']);
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
+
   $data = array(
     "date" => $date->format('c'),
     "signature" => _dropzones3_get_signature($date),
-    "key" => $path . md5(microtime()) . '-' . preg_replace('/[\x00-\x1F]/u', '_', $_POST['filename']),
+    "key" => file_uri_target($current_element["#upload_location"]) . '/' . $s3name,
   );
 
   // Prepare to send JSON text to the browser.

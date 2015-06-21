@@ -95,7 +95,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   }
   $elements += array(
     '#file_upload_delta' => $delta,
-    '#upload_location' => file_field_widget_uri($field, $instance),
+    '#upload_location' => dropzones3_widget_uri($field, $instance),
     '#upload_validators' => array(
       'file_validate_name_length' => array(),
       'file_validate_size' => array(parse_size($instance['settings']['max_filesize'])),
@@ -146,17 +146,19 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     }
     // If there's valid input, save the new upload.
     if (empty($value['fid']) && !empty($value['key'])) {
-      // Remove root folder since s3fs adds it later.
-      $config = _s3fs_get_config();
-      if ($config['root_folder']) {
+
+      // Remove root folder since s3fs adds it in getExternalUrl()
+      // instead of saving it in the uri column.
+      if (($config = _s3fs_get_config()) && $config['root_folder']) {
         $key = implode('/', array_slice(explode('/', $value['key']), 1));
       }
-
+      $key = $field['settings']['uri_scheme'] . "://" . $key;
       $wrapper = new S3fsStreamWrapper();
       try {
         $wrapper->writeUriToCache($key);
       } catch (Exception $e) {
-        // File not found in s3. Mostly likely the form submitted before upload was completed.
+        // File not found in s3. Mostly likely the form submitted before upload
+        // was completed.
         continue;
       }
       $record = db_select('s3fs_file', 's')
@@ -171,7 +173,7 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
       $file->filename = $value['filename'];
       $file->filesize = $record['filesize'];
       $file->filemime = file_get_mimetype($file->filename);
-      $file->uri = $field['settings']['uri_scheme'] . "://" . $key;
+      $file->uri = $key;
       $file->status = 0;
       $file->timestamp = REQUEST_TIME;
       // Save the uploaded file to the file_managed table.
@@ -279,7 +281,7 @@ function dropzones3_widget_process($element, &$form_state, $form) {
             'maxFilesize' => parse_size($instance['settings']['max_filesize']) / 1024 / 1024,
             'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
           ),
-          'resuming' => array('automaticRetry' => false),
+          'resuming' => array('automaticRetry' => FALSE, 'localStorageResume' => FALSE),
         ),
       ),
     ),
@@ -298,4 +300,32 @@ function dropzones3_widget_pre_render($element) {
     drupal_set_message("Library 'Dropzone S3' not found.", 'error');
   }
   return $element;
+}
+
+/**
+ * Determines the URI for a file field instance.
+ *
+ * @param $field
+ *   A field array.
+ * @param $instance
+ *   A field instance array.
+ * @param $data
+ *   An array of token objects to pass to token_replace().
+ *
+ * @return
+ *   A file directory URI with tokens replaced.
+ *
+ * @see file_field_widget_uri()
+ */
+function dropzones3_widget_uri($field, $instance, $data = array()) {
+  $config = _s3fs_get_config();
+  $destination = trim($instance['settings']['file_directory'], '/');
+
+  // Replace tokens.
+  $destination = token_replace($destination, $data);
+
+  if ($config['root_folder']) {
+    return $field['settings']['uri_scheme'] . '://' . $config['root_folder']. '/' . $destination;
+  }
+  return $field['settings']['uri_scheme'] . '://' . $destination;
 }
