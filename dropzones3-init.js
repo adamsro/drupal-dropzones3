@@ -3,10 +3,25 @@
     attach: function(context, settings) {
       $.each(settings.dzs3, function(selector) {
         $(selector, context).once('dzs3', function() {
-          var completed = 0,
-            template = document.querySelector(settings.dzs3[selector].previewTemplate);
+          var template = document.querySelector(settings.dzs3[selector].previewTemplate);
 
           settings.dzs3[selector].previewTemplate = template.innerText;
+
+          settings.dzs3[selector].init = function() {
+            var containers = this.element.querySelectorAll("[data-drupal-preview-container]");
+            for (var i = containers.length - 1; i >= 0; i--) {
+              var file = new File([""], containers[i].querySelector("[data-drupal-filename]").value);
+              file.previewElement = containers[i];
+              file.fid = containers[i].querySelector("[data-drupal-fid]").value;
+              var removeButton = containers[i].querySelector('[data-dzs3-remove]');
+              removeButton.onclick = (function(file) {
+                return function() {
+                  file.previewElement.parentNode.removeChild(file.previewElement);
+                };
+              })(file);
+              this.dummyFiles.push(file);
+            }
+          };
 
           settings.dzs3[selector].filesigned = function(file, auth, done) {
             var _ref0 = this.options.drupal.elementParents.slice(),

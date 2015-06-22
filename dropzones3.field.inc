@@ -89,7 +89,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
 
   foreach ($items as $item) {
     $elements[$delta] = $element;
-    $elements[$delta]['#default_value'] = $item;
+    $elements[$delta]['#file'] = $item;
     $elements[$delta]['#weight'] = $delta;
     $delta++;
   }
@@ -138,12 +138,11 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     $value += array(
       'fid' => 0,
       'description' => '',
-    );
     // Checkboxes lose their value when empty.
     // If the display field is present make sure its unchecked value is saved.
-    if (empty($value['display'])) {
-      $value['display'] = $field['settings']['display_field'] ? 0 : 1;
-    }
+      'display' => $field['settings']['display_field'] ? 0 : 1,
+    );
+
     // If there's valid input, save the new upload.
     if (empty($value['fid']) && !empty($value['key'])) {
 
@@ -190,8 +189,8 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
       entity_get_controller('file')->resetCache(array($file->fid));
 
       $value['fid'] = $file->fid;
-
     }
+
     $return[] = $value;
   }
   return $return;
@@ -201,35 +200,17 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
  * The #process callback for element.
  */
 function dropzones3_element_process($element, &$form_state, $form) {
-  $fid = isset($element['#value']['fid']) ? $element['#value']['fid'] : 0;
-  $element['#file'] = $fid ? file_load($fid) : FALSE;
-
-  $instance = field_widget_instance($element, $form_state);
-
   // Needed when printing files from a previous submission.
   $element['fid'] = array(
     '#type' => 'hidden',
-    '#value' => $fid,
+    '#value' => $element['#file']['fid'],
     '#attributes' => array('data-drupal-fid' => array($fid)),
   );
   $element['filename'] = array(
     '#type' => 'hidden',
-    '#value' => isset($element['#file']->filename) ? $element['#file']->filename : '',
+    '#value' => $element['#file']['filename'],
     '#attributes' => array('data-drupal-filename' => array()),
   );
-  // Add the image preview.
-  if ($element['#file'] && $instance['widget']['settings']['preview_image_style']) {
-    $variables = array(
-      'style_name' => $instance['widget']['settings']['preview_image_style'],
-      'path' => $element['#file']->uri,
-    );
-    $element['preview'] = array(
-      '#type' => 'markup',
-      // '#attributes' => array('data-dzs3-thumbnail' => array()),
-      '#markup' => theme('image_style', $variables),
-    );
-  }
-
   return $element;
 }
 
@@ -262,8 +243,6 @@ function dropzones3_widget_process($element, &$form_state, $form) {
             // Get element name without the last element since we'll add it in JS.
             'elementParents' => $element['#parents'],
             'formId' => $form['#id'],
-            'triggeringValue' => t('Upload'),
-            'startingDelta' => $element['#file_upload_delta'],
           ),
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
@@ -276,13 +255,16 @@ function dropzones3_widget_process($element, &$form_state, $form) {
           ),
           'autoQueue' => $instance['widget']['settings']['autostart'],
           'previewTemplate' => '#dropzones3-item-client',
+          'thumbnails' => array(
+            'createImageThumbnails' => FALSE,
+          ),
           'validation' => array(
             // 'maxFiles' => $element['#max_files'],
             // Convert bytes to KB to MB.
             'maxFilesize' => parse_size($instance['settings']['max_filesize']) / 1024 / 1024,
             'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
           ),
-          'resuming' => array('automaticRetry' => FALSE, 'localStorageResume' => FALSE),
+          'resuming' => array('localStorageResume' => FALSE),
         ),
       ),
     ),
