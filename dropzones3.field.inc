@@ -105,7 +105,6 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     '#theme' => 'dropzones3_container',
     '#process' => array('dropzones3_widget_process'),
     '#pre_render' => array('dropzones3_widget_pre_render'),
-    '#description' => theme('file_upload_help', array('description' => $element['#description'], 'upload_validators' => $element['#upload_validators'])),
     '#attached' => array(
       'js' => array(
         drupal_get_path('module', 'dropzones3') . '/dropzones3-init.js',
@@ -172,6 +171,9 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
       $file->uri = $key;
       $file->status = 0;
       $file->timestamp = REQUEST_TIME;
+
+      _dropzones3_filename_safty($file, $element['#upload_validators']);
+
       // Save the uploaded file to the file_managed table.
       module_invoke_all('file_presave', $file);
       module_invoke_all('entity_presave', $file, 'file');
@@ -184,12 +186,63 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
       // Clear the static loading cache.
       entity_get_controller('file')->resetCache(array($file->fid));
 
+      // Call the validation functions specified by this function's caller.
+      if($errors = file_validate($file, $element['#upload_validators'])) {
+        form_set_error($element['#name'], t('File validation error.'));
+        file_delete($file);
+        continue;
+      }
       $value['fid'] = $file->fid;
     }
 
     $return[] = $value;
   }
   return $return;
+}
+
+function _dropzones3_filename_safty(&$file, $validators) {
+    $extensions = '';
+  if (isset($validators['file_validate_extensions'])) {
+    if (isset($validators['file_validate_extensions'][0])) {
+      // Build the list of non-munged extensions if the caller provided them.
+      $extensions = $validators['file_validate_extensions'][0];
+    }
+    else {
+      // If 'file_validate_extensions' is set and the list is empty then the
+      // caller wants to allow any extension. In this case we have to remove the
+      // validator or else it will reject all extensions.
+      unset($validators['file_validate_extensions']);
+    }
+  }
+  else {
+    // No validator was provided, so add one using the default list.
+    // Build a default non-munged safe list for file_munge_filename().
+    $extensions = 'jpg jpeg gif png txt doc xls pdf ppt pps odt ods odp';
+    $validators['file_validate_extensions'] = array();
+    $validators['file_validate_extensions'][0] = $extensions;
+  }
+
+  if (!empty($extensions)) {
+    // Munge the filename to protect against possible malicious extension hiding
+    // within an unknown file type (ie: filename.html.foo).
+    $file->filename = file_munge_filename($file->filename, $extensions);
+  }
+
+  // Rename potentially executable files, to help prevent exploits (i.e. will
+  // rename filename.php.foo and filename.php to filename.php.foo.txt and
+  // filename.php.txt, respectively). Don't rename if 'allow_insecure_uploads'
+  // evaluates to TRUE.
+  if (!variable_get('allow_insecure_uploads', 0) && preg_match('/\.(php|pl|py|cgi|asp|js)(\.|$)/i', $file->filename) && (substr($file->filename, -4) != '.txt')) {
+    $file->filemime = 'text/plain';
+    $file->uri .= '.txt';
+    $file->filename .= '.txt';
+    // The .txt extension may not be in the allowed list of extensions. We have
+    // to add it here or else the file upload will fail.
+    if (!empty($extensions)) {
+      $validators['file_validate_extensions'][0] .= ' txt';
+      drupal_set_message(t('For security reasons, your upload has been renamed to %filename.', array('%filename' => $file->filename)));
+    }
+  }
 }
 
 function dropzones3_widget_process($element, &$form_state, $form) {
@@ -202,6 +255,8 @@ function dropzones3_widget_process($element, &$form_state, $form) {
   dropzones3_add_template("dropzones3-item-client", theme('dropzones3_item_client'));
 
   $element['#message'] = $instance['widget']['settings']['message'];
+  $element['#description'] = theme('file_upload_help', array('description' => $element['#description'], 'upload_validators' => $element['#upload_validators']));
+
   // Dropzone expects a dot before all accepted extensions to
   // differentiate between accepted MIME types.
   $dot = function($string) {

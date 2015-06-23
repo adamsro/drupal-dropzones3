@@ -13,4 +13,4 @@
   </span>
 </div>
 <noscript><div class="dzs3-noscript"><?php print t('File uploader requires JavaScript be enabled.'); ?></div></noscript>
-<?php print render($element['#description']); ?>
+<?php print $element['#description']; ?>
