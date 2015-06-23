@@ -80,20 +80,16 @@ function dropzones3_field_widget_settings_form($field, $instance) {
  * Implements hook_field_widget_form().
  */
 function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-
-  $elements = $element;
-  $element += array(
-    '#process' => array('dropzones3_element_process'),
-    '#theme' => 'dropzones3_item',
-  );
+  $child_element = $element;
 
   foreach ($items as $item) {
-    $elements[$delta] = $element;
-    $elements[$delta]['#file'] = $item;
-    $elements[$delta]['#weight'] = $delta;
+    $element[$delta] = $child_element;
+    $element[$delta]['#file'] = $item;
+    $element[$delta]['#weight'] = $delta;
+    $element[$delta]['#theme'] = 'dropzones3_item';
     $delta++;
   }
-  $elements += array(
+  $element += array(
     '#file_upload_delta' => $delta,
     '#upload_location' => dropzones3_widget_uri($field, $instance),
     '#upload_validators' => array(
@@ -117,7 +113,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     ),
   );
 
-  return $elements;
+  return $element;
 }
 
 /**
@@ -194,24 +190,6 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     $return[] = $value;
   }
   return $return;
-}
-
-/**
- * The #process callback for element.
- */
-function dropzones3_element_process($element, &$form_state, $form) {
-  // Needed when printing files from a previous submission.
-  $element['fid'] = array(
-    '#type' => 'hidden',
-    '#value' => $element['#file']['fid'],
-    '#attributes' => array('data-drupal-fid' => array($fid)),
-  );
-  $element['filename'] = array(
-    '#type' => 'hidden',
-    '#value' => $element['#file']['filename'],
-    '#attributes' => array('data-drupal-filename' => array()),
-  );
-  return $element;
 }
 
 function dropzones3_widget_process($element, &$form_state, $form) {

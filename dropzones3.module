@@ -204,12 +204,44 @@ function dropzones3_add_template($template_id, $template_source) {
 }
 
 /**
- * Preprocess for file item. Make the file object easier to access.
+ * Preprocess for file item.
  *
  * @param  array &$variables Variabls to be sent to the template.
  */
 function dropzones3_preprocess_dropzones3_item(&$variables) {
   $variables['file'] = $variables['element']['#file'];
+  // We dont want the element to be an input element itself but then a name
+  // isnt generated for it. Generate a name so the parent element can handle the
+  // input.
+  $name = array_shift($variables['element']['#parents']);
+  $variables['element']['#name'] = $name;
+  if (count($variables['element']['#parents'])) {
+    $variables['element']['#name'] .= '[' . implode('][', $variables['element']['#parents']) . ']';
+  }
+  array_unshift($variables['element']['#parents'], $name);
+
+// Create hidden elements outside of the formAPI to avoid having a value_callback
+// used on them.
+  $variables['element']['fid'] = array(
+    'element' => array(
+      '#theme' => 'hidden',
+      '#attributes' => array(
+        'name' => $variables['element']['#name'] . '[fid]',
+        'value' => $variables['element']['#file']['fid'],
+        'data-drupal-fid' => NULL,
+      ),
+    ),
+  );
+  $variables['element']['filename'] = array(
+    'element' => array(
+      '#theme' => 'hidden',
+      '#attributes' => array(
+        'name' => $variables['element']['#name'] . '[filename]',
+        'value' => $variables['element']['#file']['filename'],
+        'data-drupal-filename' => NULL
+      ),
+    ),
+  );
 }
 
 /**
