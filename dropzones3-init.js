@@ -14,11 +14,14 @@
               file.previewElement = containers[i];
               file.fid = containers[i].querySelector("[data-drupal-fid]").value;
               var removeButton = containers[i].querySelector('[data-dzs3-remove]');
-              removeButton.onclick = (function(file) {
+              removeButton.onclick = (function(_this, file) {
                 return function() {
+                  _this.dummyFiles = _this.dummyFiles.filter(function(f) {
+                    return f.fid !== file.fid;
+                  });
                   file.previewElement.parentNode.removeChild(file.previewElement);
                 };
-              })(file);
+              })(this, file);
               this.dummyFiles.push(file);
             }
           };

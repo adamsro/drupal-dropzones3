@@ -95,7 +95,6 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     '#upload_validators' => array(
       'file_validate_name_length' => array(),
       'file_validate_size' => array(parse_size($instance['settings']['max_filesize'])),
-      'file_validate_extensions' => array($instance['settings']['file_extensions']),
     ),
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
@@ -111,7 +110,9 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
       ),
     ),
   );
-
+  if (!empty($instance['settings']['file_extensions'])){
+    $element['#upload_validators']['file_validate_extensions'] = array($instance['settings']['file_extensions']);
+  }
   return $element;
 }
 
@@ -125,6 +126,11 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
   $instance = field_widget_instance($element, $form_state);
 
   if (empty($input)) {
+    return array();
+  }
+
+  if ($field['cardinality'] < count($input)) {
+    form_set_error($element['#name'], t('Exceeded number of allowed files.'));
     return array();
   }
 
@@ -233,9 +239,8 @@ function _dropzones3_filename_safty(&$file, $validators) {
   // filename.php.txt, respectively). Don't rename if 'allow_insecure_uploads'
   // evaluates to TRUE.
   if (!variable_get('allow_insecure_uploads', 0) && preg_match('/\.(php|pl|py|cgi|asp|js)(\.|$)/i', $file->filename) && (substr($file->filename, -4) != '.txt')) {
-    $file->filemime = 'text/plain';
-    $file->uri .= '.txt';
     $file->filename .= '.txt';
+    $file->filemime = 'text/plain';
     // The .txt extension may not be in the allowed list of extensions. We have
     // to add it here or else the file upload will fail.
     if (!empty($extensions)) {
@@ -246,12 +251,12 @@ function _dropzones3_filename_safty(&$file, $validators) {
 }
 
 function dropzones3_widget_process($element, &$form_state, $form) {
+  $field = field_widget_field($element, $form_state);
+  $instance = field_widget_instance($element, $form_state);
 
   // We will need the cached form for ajax_get_form() in the signing endpoint.
   $form_state['cache'] = TRUE;
 
-  // $field = field_widget_field($element, $form_state);
-  $instance = field_widget_instance($element, $form_state);
   dropzones3_add_template("dropzones3-item-client", theme('dropzones3_item_client'));
 
   $element['#message'] = $instance['widget']['settings']['message'];
@@ -292,7 +297,7 @@ function dropzones3_widget_process($element, &$form_state, $form) {
             'createImageThumbnails' => FALSE,
           ),
           'validation' => array(
-            // 'maxFiles' => $element['#max_files'],
+            'maxFiles' => $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED ? NULL : $field['cardinality'],
             // Convert bytes to KB to MB.
             'maxFilesize' => parse_size($instance['settings']['max_filesize']) / 1024 / 1024,
             'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
