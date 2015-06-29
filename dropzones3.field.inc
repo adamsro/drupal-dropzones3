@@ -94,7 +94,6 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     '#upload_location' => dropzones3_widget_uri($field, $instance),
     '#upload_validators' => array(
       'file_validate_name_length' => array(),
-      'file_validate_size' => array(parse_size($instance['settings']['max_filesize'])),
     ),
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
@@ -113,6 +112,9 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
   if (!empty($instance['settings']['file_extensions'])){
     $element['#upload_validators']['file_validate_extensions'] = array($instance['settings']['file_extensions']);
   }
+  if (!empty($instance['settings']['max_filesize'])){
+    $element['#upload_validators']['file_validate_size'] = array(parse_size($instance['settings']['max_filesize']));
+  }
   return $element;
 }
 
@@ -129,7 +131,7 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
     return array();
   }
 
-  if ($field['cardinality'] < count($input)) {
+  if ($field['cardinality'] != FIELD_CARDINALITY_UNLIMITED && $field['cardinality'] < count($input)) {
     form_set_error($element['#name'], t('Exceeded number of allowed files.'));
     return array();
   }
@@ -281,6 +283,7 @@ function dropzones3_widget_process($element, &$form_state, $form) {
             // Get element name without the last element since we'll add it in JS.
             'elementParents' => $element['#parents'],
             'formId' => $form['#id'],
+            'formSubmitConfirmation' => TRUE,
           ),
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
@@ -299,9 +302,10 @@ function dropzones3_widget_process($element, &$form_state, $form) {
           'validation' => array(
             'maxFiles' => $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED ? NULL : $field['cardinality'],
             // Convert bytes to KB to MB.
-            'maxFilesize' => parse_size($instance['settings']['max_filesize']) / 1024 / 1024,
+            'maxFilesize' => !empty($instance['settings']['max_filesize']) ? parse_size($instance['settings']['max_filesize']) / 1024 / 1024: NULL,
             'acceptedFiles' => isset($extension_list) ? $extension_list : NULL,
           ),
+          'addRemoveLinks' => FALSE,
           'resuming' => array('localStorageResume' => FALSE),
         ),
       ),

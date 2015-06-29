@@ -7,7 +7,25 @@
 
           settings.dzs3[selector].previewTemplate = template.innerText;
 
+          settings.dzs3[selector].dictConnectionError = "Connection Error. Click to resume.";
+          settings.dzs3[selector].dictResponseError = "Fatal Error. Please retry later.";
+          settings.dzs3[selector].dictDrupalFormSubmit = "Files in the process of being uploaded will not be saved. Continue?";
+
+          var without = function(list, rejectedItem) {
+            var item, _i, _len, _results;
+            _results = [];
+            for (_i = 0, _len = list.length; _i < _len; _i++) {
+              item = list[_i];
+              if (item !== rejectedItem) {
+                _results.push(item);
+              }
+            }
+            return _results;
+          };
+
           settings.dzs3[selector].init = function() {
+            var _this = this;
+
             var containers = this.element.querySelectorAll("[data-drupal-preview-container]");
             for (var i = containers.length - 1; i >= 0; i--) {
               var file = new File([""], containers[i].querySelector("[data-drupal-filename]").value);
@@ -19,10 +37,27 @@
                   _this.dummyFiles = _this.dummyFiles.filter(function(f) {
                     return f.fid !== file.fid;
                   });
-                  file.previewElement.parentNode.removeChild(file.previewElement);
+                  _this.emit("removedfile", file);
+                  if (_this.dummyFiles.length === 0 && _this.files.length === 0) {
+                    return _this.emit("reset");
+                  }
                 };
               })(this, file);
               this.dummyFiles.push(file);
+            }
+
+            // Ask before allowing form submission if files uploading.
+            if (this.options.drupal.formSubmitConfirmation) {
+              var form = document.getElementById(this.options.drupal.formId);
+               form.addEventListener("submit", function(e) {
+                var files = _this.getActiveFiles();
+                if (files.length) {
+                  e.preventDefault();
+                  return DropzoneS3.confirm(_this.options.dictDrupalFormSubmit, function() {
+                    return form.submit();
+                  });
+                }
+              });
             }
           };
 
