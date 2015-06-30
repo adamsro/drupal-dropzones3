@@ -4,6 +4,9 @@
       $.each(settings.dzs3, function(selector) {
         $(selector, context).once('dzs3', function() {
           var template = document.querySelector(settings.dzs3[selector].previewTemplate);
+          // Use a delta that never decrements so a newer file will never get
+          // the delta of an older file if an intermediate file is deleted.
+          var drupalMinDelta = 0;
 
           settings.dzs3[selector].previewTemplate = template.innerText;
 
@@ -44,6 +47,7 @@
                 };
               })(this, file);
               this.dummyFiles.push(file);
+              drupalMinDelta++;
             }
 
             // Ask before allowing form submission if files uploading.
@@ -63,7 +67,7 @@
 
           settings.dzs3[selector].filesigned = function(file, auth, done) {
             var _ref0 = this.options.drupal.elementParents.slice(),
-              field = _ref0.shift() + "[" + _ref0.join("][") + "][" + file.delta + "]";
+              field = _ref0.shift() + "[" + _ref0.join("][") + "][" + drupalMinDelta + "]";
 
             var key = file.previewElement.querySelectorAll("[data-drupal-key]");
             for (var i = key.length - 1; i >= 0; i--) {
@@ -75,6 +79,7 @@
               filename[j].name = field + "[filename]";
               filename[j].value = file.name;
             }
+            drupalMinDelta++;
             done();
           };
           new DropzoneS3(selector, settings.dzs3[selector]);

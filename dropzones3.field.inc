@@ -80,10 +80,8 @@ function dropzones3_field_widget_settings_form($field, $instance) {
  * Implements hook_field_widget_form().
  */
 function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-  $child_element = $element;
 
   foreach ($items as $item) {
-    $element[$delta] = $child_element;
     $element[$delta]['#file'] = $item;
     $element[$delta]['#weight'] = $delta;
     $element[$delta]['#theme'] = 'dropzones3_item';
@@ -100,6 +98,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     // Tell form API that this element will have input values to be saved.
     '#input' => TRUE,
     '#value_callback' => 'dropzones3_field_widget_value',
+    '#element_validate' => array('dropzones3_field_widget_validate'),
     '#theme' => 'dropzones3_container',
     '#process' => array('dropzones3_widget_process'),
     '#pre_render' => array('dropzones3_widget_pre_render'),
@@ -132,7 +131,7 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
   }
 
   if ($field['cardinality'] != FIELD_CARDINALITY_UNLIMITED && $field['cardinality'] < count($input)) {
-    form_set_error($element['#name'], t('Exceeded number of allowed files.'));
+    form_error($element, t('Exceeded number of allowed files.'));
     return array();
   }
 
@@ -156,6 +155,12 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
       }
       $key = $field['settings']['uri_scheme'] . "://" . $key;
 
+      // A protection against trying to resave a file if form is resubmitted.
+      $files = file_load_multiple(array(), array('uri' => $key));
+      if ($file = reset($files)) {
+        continue;
+      }
+
       $wrapper = new S3fsStreamWrapper();
       try {
         $wrapper->writeUriToCache($key);
@@ -174,7 +179,7 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
       $file = new stdClass();
       $file->uid = $user->uid;
       $file->filename = $value['filename'];
-      $file->filesize = $record['filesize'];
+      $file->filesize = $value['filesize'] = $record['filesize'];
       $file->filemime = file_get_mimetype($file->filename);
       $file->uri = $key;
       $file->status = 0;
@@ -196,16 +201,29 @@ function dropzones3_field_widget_value($element, $input = FALSE, $form_state = a
 
       // Call the validation functions specified by this function's caller.
       if($errors = file_validate($file, $element['#upload_validators'])) {
-        form_set_error($element['#name'], t('File validation error.'));
+        form_error($element, t('File validation error.'));
         file_delete($file);
         continue;
       }
       $value['fid'] = $file->fid;
     }
 
+    if (!empty($value['fid'])) {
+      $value += (array) file_load($value['fid']);
+    }
+
     $return[] = $value;
   }
   return $return;
+}
+
+/**
+ * Callback #element_validate.
+ */
+function dropzones3_field_widget_validate(&$element, &$form_state) {
+  if ($element['#required'] && !element_children($element)) {
+    form_error($element, t('!name field is required.', array('!name' => $element['#title'])));
+  }
 }
 
 function _dropzones3_filename_safty(&$file, $validators) {
@@ -258,6 +276,21 @@ function dropzones3_widget_process($element, &$form_state, $form) {
 
   // We will need the cached form for ajax_get_form() in the signing endpoint.
   $form_state['cache'] = TRUE;
+
+  // Only runs if form validation fails with files successfully uploaded.
+  if (!empty($element['#value'])) {
+    foreach(element_children($element) as $key) {
+      unset($element[$key]);
+    }
+    $delta = 0;
+    foreach ($element['#value'] as $item) {
+      $element[$delta]['#file'] = $item;
+      $element[$delta]['#weight'] = $delta;
+      $element[$delta]['#theme'] = 'dropzones3_item';
+      $delta++;
+    }
+    $element['#file_upload_delta'] = $delta;
+  }
 
   dropzones3_add_template("dropzones3-item-client", theme('dropzones3_item_client'));
 

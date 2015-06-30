@@ -245,6 +245,26 @@ function dropzones3_preprocess_dropzones3_item(&$variables) {
 }
 
 /**
+ * Preprocess for main container.
+ *
+ * @param  array &$variables Variabls to be sent to the template.
+ */
+function dropzones3_preprocess_dropzones3_container(&$variables) {
+  if (empty($variables['element']['#wrapper_attributes'])) {
+    $variables['element']['#wrapper_attributes'] = array();
+  }
+
+  $variables['element']['#wrapper_attributes']['class'][] = 'dzs3';
+
+  if (!empty(element_children($variables['element']))) {
+    $variables['element']['#wrapper_attributes']['class'][] = 'dzs3-started';
+  }
+  if ((isset($variables['element']['#parents']) && form_get_error($variables['element']))) {
+    $variables['element']['#wrapper_attributes']['class'][] = 'dzs3-has-error';
+  }
+}
+
+/**
  * Implements hook_libraries_info().
  *
  * Use DropzoneS3 and CryptoJS.
