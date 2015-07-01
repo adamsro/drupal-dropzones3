@@ -3,37 +3,27 @@
     attach: function(context, settings) {
       $.each(settings.dzs3, function(selector) {
         $(selector, context).once('dzs3', function() {
-          var template = document.querySelector(settings.dzs3[selector].previewTemplate);
           // Use a delta that never decrements so a newer file will never get
           // the delta of an older file if an intermediate file is deleted.
           var drupalMinDelta = 0;
-
-          settings.dzs3[selector].previewTemplate = template.innerText;
+          var template = document.querySelector(settings.dzs3[selector].previewTemplate);
+          settings.dzs3[selector].previewTemplate = template.innerHTML;
 
           settings.dzs3[selector].dictConnectionError = "Connection Error. Click to resume.";
           settings.dzs3[selector].dictResponseError = "Fatal Error. Please retry later.";
           settings.dzs3[selector].dictDrupalFormSubmit = "Files in the process of being uploaded will not be saved. Continue?";
 
-          var without = function(list, rejectedItem) {
-            var item, _i, _len, _results;
-            _results = [];
-            for (_i = 0, _len = list.length; _i < _len; _i++) {
-              item = list[_i];
-              if (item !== rejectedItem) {
-                _results.push(item);
-              }
-            }
-            return _results;
-          };
-
           settings.dzs3[selector].init = function() {
             var _this = this;
-
+            // Add prepopulated files from a previous submission, if any.
             var containers = this.element.querySelectorAll("[data-drupal-preview-container]");
             for (var i = containers.length - 1; i >= 0; i--) {
-              var file = new File([""], containers[i].querySelector("[data-drupal-filename]").value);
-              file.previewElement = containers[i];
-              file.fid = containers[i].querySelector("[data-drupal-fid]").value;
+              var file = {
+                'filename': containers[i].querySelector("[data-drupal-filename]").value,
+                'previewElement': containers[i],
+                'fid': containers[i].querySelector("[data-drupal-fid]").value
+              };
+
               var removeButton = containers[i].querySelector('[data-dzs3-remove]');
               removeButton.onclick = (function(_this, file) {
                 return function() {
