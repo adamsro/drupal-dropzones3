@@ -273,6 +273,7 @@ function _dropzones3_filename_safty(&$file, $validators) {
 function dropzones3_widget_process($element, &$form_state, $form) {
   $field = field_widget_field($element, $form_state);
   $instance = field_widget_instance($element, $form_state);
+  $config = _s3fs_get_config();
 
   // We will need the cached form for ajax_get_form() in the signing endpoint.
   $form_state['cache'] = TRUE;
@@ -320,8 +321,8 @@ function dropzones3_widget_process($element, &$form_state, $form) {
           ),
           's3' => array(
             'accesskey' => variable_get('dropzones3_aws_access_key'),
-            'region' => variable_get('dropzones3_aws_region'),
-            'bucket' => variable_get('dropzones3_aws_bucket'),
+            'region' => $config['region'],
+            'bucket' => $config['bucket'],
             'ssencrypt' => $instance['widget']['settings']['ssencrypt'],
           ),
           'signing' => array(

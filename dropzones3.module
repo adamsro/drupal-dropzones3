@@ -40,13 +40,15 @@ function dropzones3_menu() {
     'access arguments' => array('access content'),
     'type' => MENU_CALLBACK,
   );
-  $items['admin/config/media/dropzones3'] = array(
-    'title' => t('DropzoneS3 settings'),
-    'description' => t('Set default AWS credentials, region, and bucket for DropzoneS3 elements.'),
+  $items['admin/config/media/s3fs/dropzones3'] = array(
+    'title' => t('DropzoneS3'),
+    'description' => t('Set limited user AWS credentials for DropzoneS3 elements.'),
     'page callback' => 'drupal_get_form',
     'page arguments' => array('dropzones3_admin_form'),
     'access arguments' => array('administer dropzones3'),
     'file' => 'dropzones3.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 20,
   );
   return $items;
 }
@@ -98,6 +100,7 @@ function dropzones3_sign() {
  * Signature is scoped to service (s3), region, and date, with private key.
  */
 function _dropzones3_get_signature($date) {
+  $config = _s3fs_get_config();
   $k_date = hash_hmac(
     'sha256', $date->format("Ymd"),
     "AWS4" . variable_get('dropzones3_aws_secret_key'),
@@ -105,7 +108,7 @@ function _dropzones3_get_signature($date) {
     );
 
   $k_region = hash_hmac(
-    'sha256', variable_get('dropzones3_aws_region'), $k_date, TRUE
+    'sha256', $config['region'], $k_date, TRUE
     );
   $k_service = hash_hmac(
     'sha256', "s3", $k_region, TRUE
