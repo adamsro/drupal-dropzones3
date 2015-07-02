@@ -326,7 +326,7 @@ function dropzones3_widget_process($element, &$form_state, $form) {
             'ssencrypt' => $instance['widget']['settings']['ssencrypt'],
           ),
           'signing' => array(
-            'endpoint' => '/js/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'],
+            'endpoint' => '/dropzones3/sign/' . implode('/', $element['#array_parents']) . '/' . $form['form_build_id']['#value'],
           ),
           'autoQueue' => $instance['widget']['settings']['autostart'],
           'previewTemplate' => '#dropzones3-item-client',
