@@ -286,8 +286,8 @@ function dropzones3_libraries_info() {
     'vendor url' => 'https://github.com/adamsro/dropzones3',
     'version callback' => 'dropzones3_simple_version_callback',
     'files' => array(
-      // 'js' => array('dist/dropzones3.min.js'),
-      'js' => array('src/dropzones3.js'),
+      'js' => array('dist/dropzones3.min.js'),
+      //'js' => array('src/dropzones3.js'),
       'css' => array('dist/dropzones3.css'),
     ),
   );
