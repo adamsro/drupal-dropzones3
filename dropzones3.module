@@ -82,12 +82,16 @@ function dropzones3_sign() {
   // Cannot use file_create_filename in this case because an s3 key may exist
   // but not yet be written in Drupals cache, files uploading or abandoned.
   $s3name = md5(microtime()) . '-' . preg_replace('/[^A-Za-z0-9_\-\!\.\*\'\(\)]/', '_', $_POST['filename']);
+  if (!empty($current_element["#upload_location"])) {
+    $s3name = file_uri_target($current_element["#upload_location"]) . '/' . $s3name;
+  }
+
   $date = new DateTime('NOW', new DateTimeZone('UTC'));
 
   $data = array(
     "date" => $date->format('c'),
     "signature" => _dropzones3_get_signature($date),
-    "key" => file_uri_target($current_element["#upload_location"]) . '/' . $s3name,
+    "key" => $s3name,
   );
 
   // Prepare to send JSON text to the browser.
