@@ -38,7 +38,7 @@ function dropzones3_admin_form($form, &$form_state) {
     '#type'          => 'textfield',
     '#title'         => t('CORS Origin'),
     '#description'   => t(
-      'Please enter the URL from which your users access this website, e.g. <i>www.example.com</i>.
+      'Please enter the URL from which your users access this website, e.g. <i>https://www.example.com</i>.
       You may optionally specifiy up to one wildcard, e.g. <i>*.example.com</i>.<br>
       Upon submitting this form, if this field is filled, your S3 bucket will be configured to allow CORS
       requests from the specified origin. If the field is empty, your bucket\'s CORS config will be deleted.'),
