@@ -56,7 +56,13 @@ function dropzones3_cors_config_submit($form, &$form_state) {
   $config = _s3fs_get_config();
   $s3 = _s3fs_get_amazons3_client($config);
   if (!empty($form_state['values']['dropzones3_cors_origin'])) {
-    $cors_origin = $form_state['values']['dropzones3_cors_origin'];
+
+    $allowed_origins = preg_split("/[\s,]+/", $form_state['values']['dropzones3_cors_origin']);
+    foreach ($allowed_origins as &$origin) {
+      $origin = trim($origin);
+    }
+    $allowed_origins = array_filter($allowed_origins);
+
     $s3->putBucketCors(array(
       'Bucket' => $config['bucket'],
       'CORSRules' => array(
@@ -65,7 +71,7 @@ function dropzones3_cors_config_submit($form, &$form_state) {
           'ExposeHeaders' => array('x-amz-version-id'),
           'AllowedMethods' => array('GET','POST','PUT'),
           'MaxAgeSeconds' => 3000,
-          'AllowedOrigins' => array("http://$cors_origin", "https://$cors_origin"),
+          'AllowedOrigins' => $allowed_origins,
         ),
       ),
     ));
