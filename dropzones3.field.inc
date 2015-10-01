@@ -88,6 +88,7 @@ function dropzones3_field_widget_form(&$form, &$form_state, $field, $instance, $
     $delta++;
   }
   $element += array(
+    '#type' => 'dropzones3',
     '#file_upload_delta' => $delta,
     '#upload_location' => dropzones3_widget_uri($field, $instance),
     '#upload_validators' => array(
